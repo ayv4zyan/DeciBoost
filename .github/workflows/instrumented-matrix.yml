@@ -39,49 +39,5 @@ jobs:
           pre-emulator-launch-script: |
             sudo apt-get update
             sudo apt-get install -y libpulse0
-          script: |
-            set -eu
-            adb shell settings put global window_animation_scale 0
-            adb shell settings put global transition_animation_scale 0
-            adb shell settings put global animator_duration_scale 0
-            ./gradlew :app:assembleDebug :testing:audio-harness:assembleDebug --no-daemon
-            # Retries are bash-only (android-emulator-runner@v2 has no retries input).
-            harness_ok=false
-            app_ok=false
-            harness_rerun_done=false
-            app_rerun_done=false
-            attempt=0
-            max_attempts=3
-            while [ "$attempt" -lt "$max_attempts" ]; do
-              attempt=$((attempt + 1))
-              if [ "$harness_ok" = false ]; then
-                harness_rerun_flag=""
-                if [ "$harness_rerun_done" = false ]; then
-                  harness_rerun_flag="--rerun-tasks"
-                  harness_rerun_done=true
-                fi
-                if ./gradlew :testing:audio-harness:connectedDebugAndroidTest --no-daemon $harness_rerun_flag; then
-                  harness_ok=true
-                fi
-              fi
-              if [ "${{ matrix.api-level }}" = "36" ] && [ "$harness_ok" = true ] && [ "$app_ok" = false ]; then
-                app_rerun_flag=""
-                if [ "$app_rerun_done" = false ]; then
-                  app_rerun_flag="--rerun-tasks"
-                  app_rerun_done=true
-                fi
-                if ./gradlew :app:connectedDebugAndroidTest --no-daemon $app_rerun_flag; then
-                  app_ok=true
-                fi
-              fi
-              if [ "${{ matrix.api-level }}" != "36" ] && [ "$harness_ok" = true ]; then
-                exit 0
-              fi
-              if [ "$harness_ok" = true ] && [ "$app_ok" = true ]; then
-                exit 0
-              fi
-              echo "Instrumented tests failed (attempt $attempt/$max_attempts), retrying in 15s..."
-              sleep 15
-            done
-            exit 1
+          script: API_LEVEL=${{ matrix.api-level }} bash testing/scripts/run_ci_instrumented_tests.sh
         timeout-minutes: 90
