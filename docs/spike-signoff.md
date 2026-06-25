@@ -1,6 +1,6 @@
 # Spike Sign-Off Template
 
-Release gate item (3): spike validation on file before Play promotion.
+Release gate: spike validation on file before Play promotion (v1.0.0-alpha onward).
 
 ## Metadata
 
@@ -36,3 +36,12 @@ adb logcat -d -s DeciBoostProbe | grep "delivered=true" | tail -1
 ## Notes
 
 _Optional: OEM quirks, network conditions, or follow-up actions._
+
+## Related gates
+
+| Gate | When | Where |
+|------|------|-------|
+| Emulator harness | Every push to `main` | `.github/workflows/ci.yml` (`instrumented-api36`) |
+| API matrix | Weekly + `release/*` | `.github/workflows/instrumented-matrix.yml` |
+| YouTube nightly | Scheduled | `.github/workflows/nightly-youtube.yml` (`GA_STRICT=true`) |
+| Spike sign-off | Before Play promotion | This document |

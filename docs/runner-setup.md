@@ -1,4 +1,4 @@
-# Self-Hosted Pixel Runner Setup (PR 10)
+# Self-Hosted Pixel Runner Setup
 
 Dedicated hardware runner for nightly YouTube regression (`GA_STRICT=true`).
 
@@ -54,7 +54,7 @@ GA_STRICT=true ./testing/scripts/youtube_pause_resume_regression.sh
 - `target_gain_mb` unchanged
 - `rms_ratio >= 0.85` pre/post
 
-> **Contrast with emulator CI:** PR merge-blocking jobs on AVDs (`ci.yml`, `instrumented-matrix.yml` API 36) use signal-present RMS (`>= 0.05`) plus engine state only. Absolute `0.85` is reserved for physical devices and this nightly runner. See `DESIGN.md` Layer 2 — "Emulator vs physical device (RMS policy)".
+> **Contrast with emulator CI:** merge-blocking jobs on AVDs (`ci.yml`, `instrumented-matrix.yml` API 36) use signal-present RMS (`>= 0.05`) plus engine state only. Absolute `0.85` is reserved for physical devices and this nightly runner. See `DESIGN.md` Layer 2 — "Emulator vs physical device (RMS policy)".
 
 ## COMPONENT_PREFIX reference
 

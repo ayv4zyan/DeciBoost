@@ -1,6 +1,7 @@
 package com.deciboost.core.audio.policy
 
 object FeatureFlags {
+    const val MIN_BOOST_PERCENT = 100
     const val MAX_BOOST_CAP = 200
     const val WATCHDOG_INTERVAL_MS = 750L
 }

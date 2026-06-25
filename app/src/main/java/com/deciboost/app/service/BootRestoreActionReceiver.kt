@@ -8,10 +8,12 @@ import android.util.Log
 import com.deciboost.core.data.BoostPreferences
 import com.deciboost.core.domain.BoostController
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.io.IOException
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -33,8 +35,12 @@ class BootRestoreActionReceiver : BroadcastReceiver() {
             } catch (e: ForegroundServiceStartNotAllowedException) {
                 Log.w(TAG, "FGS start blocked from background; prompting user to open app", e)
                 BootRestoreNotifier.showFgsBlockedNotification(context, boost)
-            } catch (e: Exception) {
-                Log.e(TAG, "Boot restore failed", e)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                Log.e(TAG, "Boot restore failed reading preferences", e)
+            } catch (e: IllegalStateException) {
+                Log.e(TAG, "Boot restore failed starting service", e)
             } finally {
                 pending.finish()
             }

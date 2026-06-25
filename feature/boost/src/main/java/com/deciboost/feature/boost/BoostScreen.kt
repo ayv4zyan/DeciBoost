@@ -350,9 +350,16 @@ private fun BoostContent(
     }
 }
 
+private val GAUGE_TRACK_COLOR = androidx.compose.ui.graphics.Color(0xFF2A2F3A)
+private val GAUGE_GRADIENT_START = androidx.compose.ui.graphics.Color(0xFF7C4DFF)
+private val GAUGE_GRADIENT_MID = androidx.compose.ui.graphics.Color(0xFF18FFFF)
+private val GAUGE_GRADIENT_END = androidx.compose.ui.graphics.Color(0xFFFF6E40)
+private const val GAUGE_ARC_START_ANGLE = 135f
+private const val GAUGE_ARC_SWEEP_MAX = 270f
+
 @Composable
 private fun ArcBoostGauge(percent: Float) {
-    val sweep = ((percent - 100f) / 100f) * 270f
+    val sweep = ((percent - 100f) / 100f) * GAUGE_ARC_SWEEP_MAX
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(220.dp)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val stroke = 18f
@@ -360,9 +367,9 @@ private fun ArcBoostGauge(percent: Float) {
             val topLeft = Offset(stroke / 2, stroke / 2)
             val arcSize = Size(diameter, diameter)
             drawArc(
-                color = androidx.compose.ui.graphics.Color(0xFF2A2F3A),
-                startAngle = 135f,
-                sweepAngle = 270f,
+                color = GAUGE_TRACK_COLOR,
+                startAngle = GAUGE_ARC_START_ANGLE,
+                sweepAngle = GAUGE_ARC_SWEEP_MAX,
                 useCenter = false,
                 topLeft = topLeft,
                 size = arcSize,
@@ -371,12 +378,12 @@ private fun ArcBoostGauge(percent: Float) {
             drawArc(
                 brush = Brush.sweepGradient(
                     listOf(
-                        androidx.compose.ui.graphics.Color(0xFF7C4DFF),
-                        androidx.compose.ui.graphics.Color(0xFF18FFFF),
-                        androidx.compose.ui.graphics.Color(0xFFFF6E40),
+                        GAUGE_GRADIENT_START,
+                        GAUGE_GRADIENT_MID,
+                        GAUGE_GRADIENT_END,
                     ),
                 ),
-                startAngle = 135f,
+                startAngle = GAUGE_ARC_START_ANGLE,
                 sweepAngle = sweep,
                 useCenter = false,
                 topLeft = topLeft,

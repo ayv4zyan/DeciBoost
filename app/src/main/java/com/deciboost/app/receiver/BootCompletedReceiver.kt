@@ -7,11 +7,13 @@ import android.util.Log
 import com.deciboost.app.service.BootRestoreNotifier
 import com.deciboost.core.data.BoostPreferences
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.IOException
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -33,7 +35,11 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 if (autoStart && onboardingComplete && savedBoost > 100) {
                     BootRestoreNotifier.showRestoreNotification(context, savedBoost)
                 }
-            } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                Log.e(TAG, "Boot receiver failed reading preferences", e)
+            } catch (e: IllegalStateException) {
                 Log.e(TAG, "Boot receiver failed", e)
             } finally {
                 pending?.finish()

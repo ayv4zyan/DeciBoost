@@ -12,8 +12,10 @@ import com.deciboost.core.audio.policy.SessionEffectRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
@@ -51,8 +53,14 @@ class BoostEngineProbeImpl @Inject constructor(
         return try {
             probeExecutor.submit(Callable { sampleRmsOnBackgroundThread() })
                 .get(PROBE_CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-        } catch (e: Exception) {
-            Log.w(TAG, "measureRmsRatio failed: ${e.message}")
+        } catch (e: InterruptedException) {
+            Log.w(TAG, "measureRmsRatio interrupted: ${e.message}")
+            0f
+        } catch (e: TimeoutException) {
+            Log.w(TAG, "measureRmsRatio timed out: ${e.message}")
+            0f
+        } catch (e: ExecutionException) {
+            Log.w(TAG, "measureRmsRatio failed: ${e.cause?.message ?: e.message}")
             0f
         }
     }
@@ -118,16 +126,26 @@ class BoostEngineProbeImpl @Inject constructor(
         } catch (e: SecurityException) {
             Log.w(TAG, "Visualizer SecurityException: ${e.message}")
             0f
-        } catch (e: Exception) {
+        } catch (e: IllegalStateException) {
             Log.w(TAG, "Visualizer sampling failed: ${e.message}")
             0f
+        } catch (e: UnsupportedOperationException) {
+            Log.w(TAG, "Visualizer sampling failed: ${e.message}")
+            0f
+        } catch (e: InterruptedException) {
+            Log.w(TAG, "Visualizer sampling interrupted: ${e.message}")
+            0f
         } finally {
-            try {
-                visualizer?.enabled = false
-                visualizer?.release()
-            } catch (_: Exception) {
-                // Best-effort cleanup on probe path.
-            }
+            releaseVisualizerQuietly(visualizer)
+        }
+    }
+
+    private fun releaseVisualizerQuietly(visualizer: Visualizer?) {
+        try {
+            visualizer?.enabled = false
+            visualizer?.release()
+        } catch (_: IllegalStateException) {
+            // Best-effort cleanup on probe path.
         }
     }
 

@@ -222,7 +222,7 @@ class BoostEngineImpl(
             registry.setMaxGainMb(leResult.effectiveGainMb)
             onEffectiveGainLearned?.invoke(leResult.effectiveGainMb)
         }
-        if (Build.VERSION.SDK_INT >= 28 && enabled) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && enabled) {
             val dpDb = GainMapper.toDynamicsGainDb(leResult.effectiveGainMb)
             registry.applyDynamicsGain(SessionEffectRegistry.GLOBAL_SESSION, dpDb, true)
         } else if (!enabled) {
@@ -284,7 +284,7 @@ class BoostEngineImpl(
         effectHealthRef.set(
             EffectHealthSnapshot(
                 globalEnabled = enabled && registry.isGlobalEnabled(),
-                globalTargetGainMb = if (enabled) registry.getGlobalTargetGainMb() else 0,
+                globalTargetGainMb = if (enabled) effectiveMb else 0,
             ),
         )
     }

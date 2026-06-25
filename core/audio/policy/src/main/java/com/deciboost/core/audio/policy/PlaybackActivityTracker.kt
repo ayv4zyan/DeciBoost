@@ -94,7 +94,7 @@ class PlaybackActivityTracker(
             val started = recoveringStartedAtMs ?: return
             if (now - started > RECOVERING_TIMEOUT_MS) {
                 recoveringRetries++
-                if (recoveringRetries >= 3) {
+                if (recoveringRetries >= MAX_RECOVERING_RETRIES) {
                     recoveringStartedAtMs = null
                     transitionTo(PlaybackPhase.Paused)
                 } else {
@@ -188,6 +188,7 @@ class PlaybackActivityTracker(
     companion object {
         const val PAUSE_HOLD_MS = 200L
         const val CONFIG_DEBOUNCE_MS = 100L
+        const val MAX_RECOVERING_RETRIES = 3
         const val RECOVERING_TIMEOUT_MS = 1500L
         const val IDLE_TIMEOUT_MS = 5 * 60 * 1000L
     }

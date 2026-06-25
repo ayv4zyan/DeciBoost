@@ -61,7 +61,9 @@ object BoostProbeClient {
                     lastReapply = cursor.getString(cursor.getColumnIndexOrThrow("last_reapply")) ?: "",
                 )
             }
-        } catch (_: Exception) {
+        } catch (_: IllegalArgumentException) {
+            null
+        } catch (_: SecurityException) {
             null
         }
     }

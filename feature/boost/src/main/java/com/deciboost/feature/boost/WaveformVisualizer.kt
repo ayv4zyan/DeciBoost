@@ -23,6 +23,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.deciboost.core.audio.policy.SessionEffectRegistry
 import kotlin.math.abs
 
+private const val WAVEFORM_BYTE_MASK = 0xFF
+private const val WAVEFORM_NORMALIZE_DIVISOR = 128f
+private const val WAVEFORM_MIN_BAR_HEIGHT = 2f
+private const val WAVEFORM_BAR_STROKE_WIDTH = 3f
+private val WAVEFORM_BAR_COLOR: Color = Color(0xFF18FFFF)
+
 @Composable
 fun WaveformVisualizer(
     enabled: Boolean,
@@ -64,34 +70,7 @@ fun WaveformVisualizer(
     var waveform by remember { mutableStateOf(ByteArray(0)) }
 
     DisposableEffect(enabled, hasPermission) {
-        val visualizer = try {
-            Visualizer(SessionEffectRegistry.GLOBAL_SESSION).also { viz ->
-                viz.captureSize = Visualizer.getCaptureSizeRange()[1]
-                viz.setDataCaptureListener(
-                    object : Visualizer.OnDataCaptureListener {
-                        override fun onWaveFormDataCapture(
-                            visualizer: Visualizer?,
-                            waveformData: ByteArray?,
-                            samplingRate: Int,
-                        ) {
-                            waveformData?.let { waveform = it.copyOf() }
-                        }
-
-                        override fun onFftDataCapture(
-                            visualizer: Visualizer?,
-                            fft: ByteArray?,
-                            samplingRate: Int,
-                        ) = Unit
-                    },
-                    Visualizer.getMaxCaptureRate() / 2,
-                    true,
-                    false,
-                )
-                viz.enabled = true
-            }
-        } catch (_: Exception) {
-            null
-        }
+        val visualizer = openVisualizerOrNull { captured -> waveform = captured }
         onDispose {
             visualizer?.release()
         }
@@ -107,16 +86,56 @@ fun WaveformVisualizer(
         var x = 0f
         var index = 0
         while (index < waveform.size && x < size.width) {
-            val normalized = (waveform[index].toInt() and 0xFF) / 128f - 1f
-            val barHeight = (abs(normalized) * size.height / 2f).coerceAtLeast(2f)
+            val normalized = (waveform[index].toInt() and WAVEFORM_BYTE_MASK) /
+                WAVEFORM_NORMALIZE_DIVISOR - 1f
+            val barHeight = (abs(normalized) * size.height / 2f).coerceAtLeast(WAVEFORM_MIN_BAR_HEIGHT)
             drawLine(
-                color = Color(0xFF18FFFF),
+                color = WAVEFORM_BAR_COLOR,
                 start = androidx.compose.ui.geometry.Offset(x, size.height / 2f - barHeight),
                 end = androidx.compose.ui.geometry.Offset(x, size.height / 2f + barHeight),
-                strokeWidth = 3f,
+                strokeWidth = WAVEFORM_BAR_STROKE_WIDTH,
             )
             x += step * 2f
             index += step
         }
+    }
+}
+
+@Suppress("TooGenericExceptionCaught")
+private fun openVisualizerOrNull(onWaveform: (ByteArray) -> Unit): Visualizer? {
+    return try {
+        Visualizer(SessionEffectRegistry.GLOBAL_SESSION).also { viz ->
+            viz.captureSize = Visualizer.getCaptureSizeRange()[1]
+            viz.setDataCaptureListener(
+                object : Visualizer.OnDataCaptureListener {
+                    override fun onWaveFormDataCapture(
+                        visualizer: Visualizer?,
+                        waveformData: ByteArray?,
+                        samplingRate: Int,
+                    ) {
+                        waveformData?.let { onWaveform(it.copyOf()) }
+                    }
+
+                    override fun onFftDataCapture(
+                        visualizer: Visualizer?,
+                        fft: ByteArray?,
+                        samplingRate: Int,
+                    ) = Unit
+                },
+                Visualizer.getMaxCaptureRate() / 2,
+                true,
+                false,
+            )
+            viz.enabled = true
+        }
+    } catch (_: IllegalStateException) {
+        null
+    } catch (_: UnsupportedOperationException) {
+        null
+    } catch (_: SecurityException) {
+        null
+    } catch (_: RuntimeException) {
+        // Visualizer attach fails on some OEM/session stacks; visualizer is optional UI.
+        null
     }
 }

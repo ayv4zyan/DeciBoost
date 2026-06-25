@@ -1,6 +1,6 @@
-# Spike YouTube Checklist (PR 3)
+# Spike YouTube Checklist
 
-Manual validation on a physical device with YouTube installed.
+Manual validation on a physical device with YouTube installed. Part of the **release process** before Play promotion — not a one-time PR gate.
 
 ## Prerequisites
 
@@ -34,4 +34,4 @@ adb logcat -d -s DeciBoostProbe | grep "delivered=true" | tail -1
 
 ## Exit criteria
 
-Pass on ≥1 device before PR 7 merge. Failure triggers design review of re-apply strategy.
+Pass on ≥1 physical device before Play promotion. Record results in `docs/spike-signoff.md`. Failure triggers design review of re-apply strategy.

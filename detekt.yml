@@ -1,5 +1,5 @@
 build:
-  maxIssues: 1000
+  maxIssues: 0
 
 config:
   validation: true
@@ -7,8 +7,63 @@ config:
 complexity:
   LongMethod:
     threshold: 80
+    ignoreAnnotated:
+      - Composable
+      - Preview
+  LongParameterList:
+    functionThreshold: 14
+    constructorThreshold: 10
+    ignoreDefaultParameters: true
+    ignoreAnnotated:
+      - Composable
+      - Preview
+  TooManyFunctions:
+    thresholdInFiles: 25
+    thresholdInClasses: 20
+    thresholdInInterfaces: 15
+    thresholdInObjects: 20
+    thresholdInEnums: 15
+
+naming:
+  FunctionNaming:
+    functionPattern: '[a-z][a-zA-Z0-9]*'
+    ignoreAnnotated:
+      - Composable
+      - Preview
+  MatchingDeclarationName:
+    active: true
+    excludes:
+      - '**/navigation/**'
+      - '**/SettingsSummaryPanel.kt'
+      - '**/AudioOutputInfo.kt'
 
 style:
+  ReturnCount:
+    max: 4
+    excludeGuardClauses: true
+    excludeReturnFromLambda: true
   MaxLineLength:
-    maxLineLength: 140
     active: false
+  MagicNumber:
+    ignoreNumbers:
+      - '-1'
+      - '0'
+      - '1'
+      - '2'
+      - '100'
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+      - '**/testing/**'
+    ignorePropertyDeclaration: true
+    ignoreAnnotation: true
+    ignoreEnums: true
+    ignoreNamedArgument: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreLocalVariableDeclaration: true
+    ignoreConstantDeclaration: true
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: true
+    allowedExceptionNameRegex: '(ignore|expected).*'

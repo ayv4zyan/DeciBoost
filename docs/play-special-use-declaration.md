@@ -1,4 +1,6 @@
-# Play Console — Special Use FGS Declaration (Draft)
+# Play Console — Special Use FGS Declaration
+
+> **Internal / ops reference** — wording for Play Console submission. Refine with legal before production release.
 
 **Subtype:** `audio_volume_boost`  
 **FGS type:** `specialUse`  
@@ -30,7 +32,4 @@ DeciBoost does not play media; it enhances audio produced by other apps. The ser
 - Prominent hearing/speaker safety warnings in-app at elevated boost levels.
 - Global boost may amplify notifications and accessibility audio; disclosed in Settings.
 - Service stops when boost returns to 100% and idle timeout elapses.
-
----
-
-*Draft for Play Console “Foreground service permissions” form — refine wording with legal before submission.*
+- Privacy policy: [`docs/PRIVACY.md`](PRIVACY.md)

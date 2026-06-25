@@ -78,7 +78,7 @@ class PlaybackSessionMonitor(
             val attrs = config.audioAttributes
             val usage = attrs.usage
             val contentType = attrs.contentType
-            usageHash = usageHash xor (usage xor (contentType shl 8))
+            usageHash = usageHash xor (usage xor (contentType shl CONTENT_TYPE_HASH_SHIFT))
             hasMedia = hasMedia ||
                 usage == AudioAttributes.USAGE_MEDIA ||
                 contentType == AudioAttributes.CONTENT_TYPE_MUSIC
@@ -105,5 +105,9 @@ class PlaybackSessionMonitor(
     fun shutdown() {
         stop()
         monitorThread.quitSafely()
+    }
+
+    private companion object {
+        const val CONTENT_TYPE_HASH_SHIFT = 8
     }
 }

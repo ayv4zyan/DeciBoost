@@ -45,7 +45,7 @@ fun AboutScreen(onBack: () -> Unit) {
             @Suppress("DEPRECATION")
             packageManager.getPackageInfo(packageName, 0).versionName
         } ?: "unknown"
-    } catch (_: Exception) {
+    } catch (_: PackageManager.NameNotFoundException) {
         "unknown"
     }
 
@@ -81,16 +81,17 @@ fun AboutScreen(onBack: () -> Unit) {
                 "Session-lifecycle-aware media volume boost for Android.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            // v1.0.0-alpha: opens in-repo policy on GitHub; see docs/PRIVACY.md for backup/UX notes.
             TextButton(
                 onClick = {
                     val intent = Intent(
                         Intent.ACTION_VIEW,
-                        Uri.parse("https://deciboost.app/privacy"),
+                        Uri.parse("https://github.com/ayv4zyan/DeciBoost/blob/main/docs/PRIVACY.md"),
                     )
                     try {
                         context.startActivity(Intent.createChooser(intent, "Open privacy policy"))
                     } catch (_: ActivityNotFoundException) {
-                        // No browser handler — placeholder URL until legal publishes final page.
+                        // No browser handler on this device.
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

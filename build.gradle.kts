@@ -15,6 +15,7 @@ subprojects {
     configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
         buildUponDefaultConfig = true
         allRules = false
+        config.setFrom(files("${rootProject.projectDir}/detekt.yml"))
     }
     configurations.configureEach {
         resolutionStrategy {

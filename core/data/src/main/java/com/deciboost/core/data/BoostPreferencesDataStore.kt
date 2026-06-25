@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.datastore.preferences.preferencesDataStoreFile
+import com.deciboost.core.audio.policy.FeatureFlags
 import com.deciboost.core.data.DeviceFingerprint.effectiveMaxGainMbKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -90,7 +91,12 @@ class BoostPreferencesDataStore(
     }
 
     override suspend fun setBoostPercent(value: Int) {
-        dataStore.edit { it[Keys.BOOST_PERCENT] = value.coerceIn(100, 200) }
+        dataStore.edit {
+            it[Keys.BOOST_PERCENT] = value.coerceIn(
+                FeatureFlags.MIN_BOOST_PERCENT,
+                FeatureFlags.MAX_BOOST_CAP,
+            )
+        }
     }
 
     override suspend fun setVolumePercent(value: Int) {

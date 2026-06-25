@@ -45,7 +45,9 @@ object BoostProbeTestClient {
                     ) == 1,
                 )
             }
-        } catch (_: Exception) {
+        } catch (_: IllegalArgumentException) {
+            null
+        } catch (_: SecurityException) {
             null
         }
     }

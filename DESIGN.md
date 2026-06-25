@@ -2,9 +2,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Author** | TBD |
+| **Author** | Artur Ayvazyan ([@ayv4zyan](https://github.com/ayv4zyan)) |
 | **Date** | 2026-06-25 |
-| **Status** | Draft (rev. 5 — user decisions locked) |
+| **Status** | Implemented / Current (v1.0.0-alpha — PRs 1–11 complete) |
 | **Target platform** | Android 16 (API 36) primary; backward compatible to API 26 |
 
 ---
@@ -401,7 +401,7 @@ class NonMediaPlaybackGuard {
 }
 ```
 
-**Limitation:** anonymized configs cannot identify the owning app; concurrent notification + media may keep boost enabled. Settings toggle documented in PR 9.
+**Limitation:** anonymized configs cannot identify the owning app; concurrent notification + media may keep boost enabled. Settings toggle in `:feature:settings`.
 
 #### PlaybackSessionMonitor & OutputDeviceMonitor
 
@@ -415,7 +415,7 @@ interface ObserveActivePlaybackUseCase {
 
 class OutputDeviceMonitor(context: Context, private val onDeviceChanged: () -> Unit) {
     // Registers AudioDeviceCallback + ACTION_AUDIO_BECOMING_NOISY receiver
-    // Owner: wired in BoostEngineImpl.start(), PR 4
+    // Owner: wired in BoostEngineImpl.start()
 }
 ```
 
@@ -640,7 +640,7 @@ object BoostProbeClient {
 
 - **Compact (phone):** single-column boost screen.
 - **Medium/expanded (tablet, foldable inner):** two-pane — boost controls left, settings/device info right (`ListDetailPaneScaffold`).
-- **Sunset plan:** ship adaptive layouts in PR 8; avoid `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` unless QA finds breakage — if used, document removal before API 37.
+- **Sunset plan:** adaptive layouts shipped in `:feature:boost`; avoid `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` unless QA finds breakage — if used, document removal before API 37.
 
 **Accessibility:** TalkBack labels; `Modifier.semantics { liveRegion = Polite }` for device changes; note that session-0 boost may amplify TalkBack if it routes through media mixer (Settings warning).
 
@@ -763,7 +763,7 @@ interface BoostEngineProbe {
 |------|----------|------------|------------|
 | Session-0 LoudnessEnhancer deprecated log | Medium | High | Accepted; DynamicsProcessing fallback |
 | OEM rejects high `setTargetGain` | Medium | Medium | Runtime clamp + per-device `effective_max_gain_mb` |
-| Harness passes, YouTube fails | **High** | Medium | Spike PR 3 + GA-blocking YouTube regression; documented gap below |
+| Harness passes, YouTube fails | **High** | Medium | Spike validation + GA-blocking YouTube regression; documented gap below |
 | YouTube CI flake | Medium | Medium | Dedicated self-hosted Pixel; 3 retries; flake budget tracked; blocks release if nightly red |
 | `specialUse` Play rejection | Medium | Low | Precise FGS subtype declaration |
 
@@ -807,7 +807,7 @@ adb logcat -d -s DeciBoostProbe | grep "delivered=true" | tail -1
 
 ## Testing Strategy
 
-### Layer 0 — Spike validation (PR 3, manual)
+### Layer 0 — Spike validation (manual, release process)
 
 **Checklist** (physical device, YouTube installed, FGS backgrounded):
 
@@ -818,7 +818,7 @@ adb logcat -d -s DeciBoostProbe | grep "delivered=true" | tail -1
 5. Confirm audible boost within 1.5 s (subjective + logcat `last_reapply=PLAYBACK_ACTIVE`).
 6. Repeat on API 34 and API 36 devices if available.
 
-**Exit criteria:** pass on ≥1 device before PR 7 merge. Failure triggers design review of re-apply strategy.
+**Exit criteria:** pass on ≥1 physical device before Play promotion. Failure triggers design review of re-apply strategy. See `docs/spike-youtube-checklist.md` and `docs/spike-signoff.md`.
 
 ### Layer 1 — Unit tests (JVM, `:core:audio:policy`, `:testing:fakes`)
 
@@ -828,7 +828,7 @@ adb logcat -d -s DeciBoostProbe | grep "delivered=true" | tail -1
 
 ### Layer 2 — Instrumentation harness (merge-blocking)
 
-`PauseResumeBoostInstrumentedTest` — dependencies: monitor + watchdog + FGS (PR 4–6).
+`PauseResumeBoostInstrumentedTest` — exercises monitor + watchdog + FGS (implemented in `:testing:audio-harness`).
 
 **Setup — `RECORD_AUDIO` grant (API 23+):**
 
@@ -1001,11 +1001,18 @@ jobs:
 ### Layer 4 — CI matrix
 
 ```yaml
+# build.gradle.kts — detekt wired for all subprojects
+config.setFrom(files("${rootProject.projectDir}/detekt.yml"))  # maxIssues: 0
+
 # .github/workflows/ci.yml — every PR
 jobs:
   unit:
     runs-on: ubuntu-latest
-    steps: [./gradlew :core:audio:policy:test :testing:fakes:test]
+    steps: [./gradlew test --no-daemon]
+
+  lint-detekt:
+    runs-on: ubuntu-latest
+    steps: [./gradlew detekt --no-daemon]
 
   instrumented-api36:
     runs-on: macos-latest
@@ -1015,16 +1022,22 @@ jobs:
           api-level: 36
           target: google_apis
           arch: x86_64
-          script: ./gradlew :testing:audio-harness:connectedDebugAndroidTest
-        timeout-minutes: 45
-        # Typical runtime: boot 3–5 min + test 5–10 min
+          ram-size: 4096
+          disable-animations: true
+          boot-timeout: 600
+          emulator-options: -no-snapshot-save -no-boot-anim -gpu swiftshader_indirect
+          script: |
+            # Pre-build APKs; per-module retries (3x, 15s sleep); --rerun-tasks once per module
+            ./gradlew :app:assembleDebug :testing:audio-harness:assembleDebug
+            # harness connectedDebugAndroidTest, then :app:connectedDebugAndroidTest
+        timeout-minutes: 90
 
-# .github/workflows/instrumented-matrix.yml — weekly + pre-release
+# .github/workflows/instrumented-matrix.yml — weekly + release/*
   instrumented-matrix:
     strategy:
       matrix:
         api-level: [26, 34, 36]
-    # ... same emulator-runner, shard retries: 2
+    # API 36: harness + app tests; API 26/34: harness only; same retry/hardening as ci.yml
 ```
 
 | Job | When | API levels | Blocking |
@@ -1161,7 +1174,7 @@ on:
 | **`BoostProbeClient` ordered broadcast** | `targetContext.sendOrderedBroadcast` (app UID); result extras primary |
 | **Shell probe via `run-as` + logcat** | `exported=false` safe; logcat `DeciBoostProbe` is shell source of truth |
 | **`COMPONENT_PREFIX` for debug components** | Avoids `.debug.*` / `applicationId` resolution bug |
-| **Spike PR 3 before harness** | Fail-fast on YouTube hypothesis |
+| **Spike validation before release** | Fail-fast on YouTube hypothesis (ongoing release gate) |
 | **Harness merge-blocking; YouTube nightly release-blocking** | Honest gates — harness ≠ YouTube; Pixel nightly is not manual-only |
 | **Layered RMS assertion in harness** | Emulator CI: signal-present (0.05) + engine state; physical/Pixel: absolute >= 0.85 — probe-only tests insufficient |
 | **Local DataStore kill switch (v1)** | No Remote Config infrastructure in v1 |
@@ -1171,7 +1184,9 @@ on:
 
 ---
 
-## PR Plan
+## Implementation History (PRs 1–11)
+
+All planned PRs are **implemented** as of v1.0.0-alpha. The sections below document the original delivery sequence for reference.
 
 ### PR 1: Project scaffold & CI skeleton
 - **Files:** Root Gradle, modules, `DeciBoostApplication.kt`, `ci.yml` (unit job only)

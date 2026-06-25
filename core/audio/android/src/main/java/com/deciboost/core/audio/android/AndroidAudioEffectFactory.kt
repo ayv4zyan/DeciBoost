@@ -15,7 +15,7 @@ class AndroidAudioEffectFactory : AudioEffectFactory {
     }
 
     override fun createDynamicsProcessing(sessionId: Int): DynamicsProcessingHandle? {
-        if (Build.VERSION.SDK_INT < 28) return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
         return AndroidDynamicsProcessingHandle(DynamicsProcessing(sessionId))
     }
 }
@@ -39,7 +39,9 @@ private class AndroidLoudnessEnhancerHandle(
             AudioEffect.SUCCESS
         } catch (_: IllegalArgumentException) {
             SessionEffectRegistryCompat.ERROR_BAD_VALUE
-        } catch (_: Exception) {
+        } catch (_: IllegalStateException) {
+            AudioEffect.ERROR
+        } catch (_: UnsupportedOperationException) {
             AudioEffect.ERROR
         }
     }
@@ -64,7 +66,7 @@ private class AndroidDynamicsProcessingHandle(
 
     override fun setPostGain(db: Float): Int {
         return try {
-            if (Build.VERSION.SDK_INT >= 28) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val config = processing.config
                 val limiter = config.getLimiterByChannelIndex(0)
                 if (limiter != null) {
@@ -75,7 +77,11 @@ private class AndroidDynamicsProcessingHandle(
             } else {
                 AudioEffect.ERROR
             }
-        } catch (_: Exception) {
+        } catch (_: IllegalArgumentException) {
+            AudioEffect.ERROR
+        } catch (_: IllegalStateException) {
+            AudioEffect.ERROR
+        } catch (_: UnsupportedOperationException) {
             AudioEffect.ERROR
         }
     }
@@ -88,7 +94,7 @@ private class AndroidDynamicsProcessingHandle(
         try {
             val method = processing.javaClass.getMethod("setConfig", DynamicsProcessing.Config::class.java)
             method.invoke(processing, config)
-        } catch (_: Exception) {
+        } catch (_: ReflectiveOperationException) {
             // Best-effort: some OEM builds apply limiter.postGain in-place without setConfig.
         }
     }

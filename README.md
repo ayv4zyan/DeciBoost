@@ -8,7 +8,7 @@ Unlike typical volume booster apps that lose boost after **pause → resume**, D
 [![Target SDK](https://img.shields.io/badge/Target%20SDK-36-blue)](https://developer.android.com/about/versions/16)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![License](https://img.shields.io/badge/License-TBD-lightgrey)](#license)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 ---
 
@@ -66,7 +66,7 @@ This fixes the common failure mode where boost *looks* enabled in software but d
 
 ## Screenshots
 
-_Screenshots coming soon._
+_App store screenshots are pending for v1.0.0-alpha._
 
 ---
 
@@ -117,6 +117,7 @@ Debug package: `com.deciboost.app.debug`
 ./gradlew assembleDebug          # Debug APK
 ./gradlew assembleRelease        # Release APK (minified)
 ./gradlew test                   # JVM unit tests
+./gradlew detekt                 # Static analysis (all modules)
 ./gradlew :testing:audio-harness:connectedDebugAndroidTest  # Emulator harness
 ```
 
@@ -173,25 +174,31 @@ DeciBoost/
 ├── testing/
 │   ├── audio-harness/      # Instrumented pause/resume tests
 │   └── scripts/            # YouTube regression (adb)
-└── docs/                   # Spike checklist, runner setup, Play declarations
+└── docs/                   # Privacy, spike checklist, runner setup, Play declarations
 ```
 
 ---
 
 ## Contributing
 
-Issues and pull requests are welcome on [GitHub](https://github.com/ayv4zyan/DeciBoost).
+Issues and pull requests are welcome on [GitHub](https://github.com/ayv4zyan/DeciBoost). See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
-1. Fork the repository
-2. Create a feature branch
-3. Run `./gradlew test detekt` and instrumented tests where relevant
-4. Open a pull request with a clear description and test evidence
+---
+
+## Legal & policies
+
+| Document | Description |
+|----------|-------------|
+| [LICENSE](LICENSE) | Apache License 2.0 |
+| [docs/PRIVACY.md](docs/PRIVACY.md) | Privacy policy (local-only v1, no analytics) |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
 
 ---
 
 ## License
 
-License TBD. See repository for updates.
+Copyright 2026 [Artur Ayvazyan](https://github.com/ayv4zyan). Licensed under the [Apache License, Version 2.0](LICENSE).
 
 ---
 

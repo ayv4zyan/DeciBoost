@@ -123,7 +123,7 @@ class BoostViewModel @Inject constructor(
         viewModelScope.launch {
             while (isActive) {
                 _outputDeviceLabel.value = resolveCurrentOutputDevice(application).label
-                delay(2_000)
+                delay(OUTPUT_DEVICE_POLL_INTERVAL_MS)
             }
         }
     }
@@ -233,5 +233,9 @@ class BoostViewModel @Inject constructor(
     override fun onCleared() {
         ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
         super.onCleared()
+    }
+
+    private companion object {
+        const val OUTPUT_DEVICE_POLL_INTERVAL_MS = 2_000L
     }
 }
