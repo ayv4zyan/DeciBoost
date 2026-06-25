@@ -129,7 +129,7 @@ fun BoostScreen(
         )
     }
 
-    val boostContent: @Composable (Modifier, Boolean) -> Unit = { modifier, showSettingsButton ->
+    val boostContent: @Composable (Modifier) -> Unit = { modifier ->
         BoostContent(
             modifier = modifier,
             percent = sliderPercent,
@@ -142,9 +142,7 @@ fun BoostScreen(
             onPercentChange = { viewModel.onBoostChanged(it.toInt()) },
             onVolumeChange = viewModel::onVolumeChanged,
             shouldPerformHaptic = viewModel::shouldPerformHaptic,
-            onNavigateToSettings = onNavigateToSettings,
             onPermissionRevoked = viewModel::syncVisualizerPermission,
-            showSettingsButton = showSettingsButton,
         )
     }
 
@@ -175,7 +173,7 @@ fun BoostScreen(
                     .padding(padding),
                 listPane = {
                     AnimatedPane {
-                        boostContent(Modifier.fillMaxHeight(), false)
+                        boostContent(Modifier.fillMaxHeight())
                     }
                 },
                 detailPane = {
@@ -217,7 +215,7 @@ fun BoostScreen(
                 )
             },
         ) { padding ->
-            boostContent(Modifier.padding(padding), true)
+            boostContent(Modifier.padding(padding))
         }
     }
 }
@@ -235,9 +233,7 @@ private fun BoostContent(
     onPercentChange: (Float) -> Unit,
     onVolumeChange: (Int) -> Unit,
     shouldPerformHaptic: (Int) -> Boolean,
-    onNavigateToSettings: () -> Unit,
     onPermissionRevoked: () -> Unit,
-    showSettingsButton: Boolean = true,
 ) {
     val animatedPercent by animateFloatAsState(percent.toFloat(), label = "boost")
     val haptic = LocalHapticFeedback.current
@@ -339,12 +335,6 @@ private fun BoostContent(
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
-            }
-        }
-
-        if (showSettingsButton) {
-            TextButton(onClick = onNavigateToSettings) {
-                Text("Open Settings")
             }
         }
     }

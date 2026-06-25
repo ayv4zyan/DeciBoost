@@ -1,5 +1,8 @@
 package com.deciboost.app.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -12,6 +15,8 @@ import com.deciboost.feature.settings.OnboardingScreen
 import com.deciboost.feature.settings.OnboardingViewModel
 import com.deciboost.feature.settings.AboutScreen
 import com.deciboost.feature.settings.SettingsScreen
+
+private const val NAV_MOTION_DURATION_MS = 300
 
 object Routes {
     const val ONBOARDING = "onboarding"
@@ -28,7 +33,34 @@ fun DeciBoostNavHost() {
 
     val startDestination = if (onboardingComplete) Routes.BOOST else Routes.ONBOARDING
 
-    NavHost(navController = navController, startDestination = startDestination) {
+    NavHost(
+        navController = navController,
+        startDestination = startDestination,
+        enterTransition = {
+            slideInHorizontally(
+                initialOffsetX = { fullWidth -> fullWidth },
+                animationSpec = tween(NAV_MOTION_DURATION_MS),
+            )
+        },
+        exitTransition = {
+            slideOutHorizontally(
+                targetOffsetX = { fullWidth -> -fullWidth },
+                animationSpec = tween(NAV_MOTION_DURATION_MS),
+            )
+        },
+        popEnterTransition = {
+            slideInHorizontally(
+                initialOffsetX = { fullWidth -> -fullWidth },
+                animationSpec = tween(NAV_MOTION_DURATION_MS),
+            )
+        },
+        popExitTransition = {
+            slideOutHorizontally(
+                targetOffsetX = { fullWidth -> fullWidth },
+                animationSpec = tween(NAV_MOTION_DURATION_MS),
+            )
+        },
+    ) {
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 onComplete = {

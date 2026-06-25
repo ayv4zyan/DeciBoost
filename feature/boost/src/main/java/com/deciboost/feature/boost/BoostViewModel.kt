@@ -91,6 +91,7 @@ class BoostViewModel @Inject constructor(
     private val processLifecycleObserver = object : DefaultLifecycleObserver {
         override fun onStart(owner: LifecycleOwner) {
             bindService()
+            viewModelScope.launch { syncHardwareVolume() }
         }
 
         override fun onStop(owner: LifecycleOwner) {
@@ -100,9 +101,14 @@ class BoostViewModel @Inject constructor(
 
     init {
         ProcessLifecycleOwner.get().lifecycle.addObserver(processLifecycleObserver)
+        volumeController.onVolumeChanged = { percent ->
+            viewModelScope.launch {
+                preferences.setVolumePercent(percent)
+            }
+        }
+        volumeController.startObserving()
         viewModelScope.launch {
-            val hardwareVolume = volumeController.getVolumePercent()
-            preferences.setVolumePercent(hardwareVolume)
+            syncHardwareVolume()
         }
         viewModelScope.launch {
             if (preferences.onboardingComplete.first()) {
@@ -231,8 +237,14 @@ class BoostViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        volumeController.stopObserving()
+        volumeController.onVolumeChanged = null
         ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
         super.onCleared()
+    }
+
+    private suspend fun syncHardwareVolume() {
+        preferences.setVolumePercent(volumeController.getVolumePercent())
     }
 
     private companion object {
