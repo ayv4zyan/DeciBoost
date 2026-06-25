@@ -1,0 +1,50 @@
+name: Instrumented Matrix
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  push:
+    branches: ["release/*"]
+  workflow_dispatch:
+
+jobs:
+  instrumented-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 34, 36]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: chmod +x gradlew
+      - name: Instrumented tests API ${{ matrix.api-level }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          ram-size: 4096
+          emulator-options: -no-snapshot-save
+          script: |
+            set -euo pipefail
+            # Retries are bash-only (android-emulator-runner@v2 has no retries input).
+            attempt=0
+            max_attempts=3
+            while [ "$attempt" -lt "$max_attempts" ]; do
+              attempt=$((attempt + 1))
+              if [ "${{ matrix.api-level }}" = "36" ]; then
+                gradle_cmd="./gradlew :testing:audio-harness:connectedDebugAndroidTest :app:connectedDebugAndroidTest --no-daemon --rerun-tasks"
+              else
+                gradle_cmd="./gradlew :testing:audio-harness:connectedDebugAndroidTest --no-daemon --rerun-tasks"
+              fi
+              if eval "$gradle_cmd"; then
+                exit 0
+              fi
+              echo "Instrumented tests failed (attempt $attempt/$max_attempts), retrying..."
+            done
+            exit 1
+        timeout-minutes: 75

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <application>
+        <activity
+            android:name=".debug.BoostTrampolineActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="com.deciboost.SET_BOOST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".debug.SpikeBoostActivity"
+            android:exported="true"
+            android:label="Spike Boost">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".debug.DebugBoostStateReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.deciboost.DEBUG.DUMP_BOOST_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".debug.DebugTestSetupReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.deciboost.DEBUG.SEED_ONBOARDING" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".debug.DebugHarnessToneReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.deciboost.DEBUG.START_HARNESS_TONE" />
+                <action android:name="com.deciboost.DEBUG.STOP_HARNESS_TONE" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name=".debug.BoostProbeProvider"
+            android:authorities="com.deciboost.app.debug.probe"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+    </application>
+</manifest>

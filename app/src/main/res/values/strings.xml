@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DeciBoost</string>
+    <string name="notification_channel_name">Volume Boost</string>
+    <string name="notification_channel_description">Shows when DeciBoost is actively boosting audio</string>
+    <string name="notification_title">DeciBoost active</string>
+    <string name="notification_text">Media volume boost is running</string>
+    <string name="boot_notification_channel">Boot restore</string>
+    <string name="boot_notification_title">Restore DeciBoost?</string>
+    <string name="boot_notification_text">You had %1$d%% boost before reboot. Tap to restore.</string>
+    <string name="boot_notification_restore">Restore</string>
+    <string name="boot_notification_fgs_blocked_title">Open DeciBoost to restore</string>
+    <string name="boot_notification_fgs_blocked_text">Tap to open DeciBoost and restore your %1$d%% boost.</string>
+    <string name="boot_notification_open_app">Open app</string>
+</resources>

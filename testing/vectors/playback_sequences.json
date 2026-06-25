@@ -1,0 +1,46 @@
+{
+  "vectors": [
+    {
+      "id": "pause_resume_basic",
+      "config_counts": [2, 2, 2, 2],
+      "music_active": [true, true, false, true],
+      "expected_min_reapplies": 2,
+      "expected_final_phase": "Active"
+    },
+    {
+      "id": "youtube_like_churn",
+      "config_counts": [1, 2, 1, 2],
+      "music_active": [true, true, false, true],
+      "expected_min_reapplies": 3,
+      "expected_final_phase": "Active"
+    },
+    {
+      "id": "bluetooth_route",
+      "config_counts": [2, 2],
+      "music_active": [true, true],
+      "device_event": true,
+      "expected_min_reapplies": 1,
+      "expected_final_phase": "Active"
+    },
+    {
+      "id": "idle_no_boost",
+      "config_counts": [0, 0],
+      "music_active": [false, false],
+      "boost_percent": 100,
+      "expected_min_reapplies": 0,
+      "expected_final_phase": "Idle"
+    },
+    {
+      "id": "notification_dominant",
+      "config_counts": [1, 1],
+      "music_active": [true, true],
+      "configs": [
+        {"count": 1, "usageHash": 5, "hasMediaUsage": false, "hasNotificationUsage": true},
+        {"count": 1, "usageHash": 5, "hasMediaUsage": false, "hasNotificationUsage": true}
+      ],
+      "boost_percent": 150,
+      "expected_min_reapplies": 0,
+      "expected_final_phase": "Active"
+    }
+  ]
+}

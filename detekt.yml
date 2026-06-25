@@ -1,0 +1,14 @@
+build:
+  maxIssues: 1000
+
+config:
+  validation: true
+
+complexity:
+  LongMethod:
+    threshold: 80
+
+style:
+  MaxLineLength:
+    maxLineLength: 140
+    active: false

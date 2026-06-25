@@ -1,0 +1,23 @@
+name: Nightly YouTube Regression
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  push:
+    branches: ["release/*"]
+  workflow_dispatch:
+
+jobs:
+  youtube-regression:
+    runs-on: [self-hosted, deciboost-youtube]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: chmod +x gradlew
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Run YouTube regression
+        run: GA_STRICT=true ./testing/scripts/youtube_pause_resume_regression.sh
