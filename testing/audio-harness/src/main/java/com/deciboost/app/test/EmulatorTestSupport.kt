@@ -8,11 +8,11 @@ import androidx.test.platform.app.InstrumentationRegistry
 object EmulatorTestSupport {
     /**
      * Emulator merge gate: probe must observe non-silent output (signal-present check).
-     * Absolute 0.85 is reserved for physical devices per DESIGN.md.
+     * Absolute 0.85 applies when running harness on a physical device (local/CI).
      */
     const val EMULATOR_MIN_SIGNAL = 0.05f
 
-    /** Minimum RMS on physical devices per DESIGN.md AC. */
+    /** Minimum RMS when the harness runs on a physical device (not an AVD). */
     const val DEVICE_MIN_RMS = 0.85f
 
     private const val DEBUG_PKG = "com.deciboost.app.debug"

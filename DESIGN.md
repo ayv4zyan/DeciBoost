@@ -13,7 +13,7 @@
 
 DeciBoost is a greenfield Android application that boosts media playback volume above the system 100% cap. The product differentiator is **session-lifecycle-aware boosting**: unlike BoostX (which attaches `LoudnessEnhancer(0)` once and releases effects when the Activity is destroyed), DeciBoost keeps a foreground audio engine alive and **re-applies boost deterministically whenever playback sessions change state**—including the YouTube pause → resume path that drops boost in BoostX.
 
-The architecture is a modular **Kotlin / Jetpack Compose / Material 3** app with a dedicated `:core:audio` engine module, a `BoostForegroundService` for process longevity, and a **layered** test strategy: an early manual spike validates the core hypothesis on real YouTube before full UI investment; a merge-blocking harness proves engine invariants; a **nightly YouTube regression on a dedicated self-hosted Pixel** (`GA_STRICT=true`) proves the product differentiator and gates release.
+The architecture is a modular **Kotlin / Jetpack Compose / Material 3** app with a dedicated `:core:audio` engine module, a `BoostForegroundService` for process longevity, and a **layered** test strategy: a merge-blocking emulator harness proves engine invariants on every PR; an optional **manual spike** on a physical device with YouTube validates the product differentiator before release.
 
 ---
 
@@ -87,9 +87,9 @@ No API 36 release notes introduce breaking changes to `LoudnessEnhancer` or `Aud
 3. Target **API 36** (`targetSdk = 36`, `compileSdk = 36`); remain functional on **API 26+**.
 4. Beautiful, modern UI (**Kotlin, Jetpack Compose, Material 3**, dynamic theming) — stack confirmed.
 5. **200% max boost from first public release** (alpha onward), with mandatory safety dialogs at elevated levels.
-6. Deterministic, scriptable regression test for the pause/resume scenario.
+6. Deterministic, scriptable pause/resume regression via the instrumented harness (CI emulators).
 7. Foreground service with correct FGS type declarations for Play Store compliance.
-8. **Nightly YouTube regression** on a dedicated self-hosted Pixel device (`GA_STRICT=true`).
+8. Optional manual YouTube spike on a physical device before release (see `docs/spike-youtube-checklist.md`).
 
 ### Non-Goals (v1)
 
@@ -198,9 +198,8 @@ DeciBoost/
 ├── build-logic/                  # Convention plugins (optional)
 ├── gradle/libs.versions.toml
 └── .github/workflows/
-    ├── ci.yml                    # PR: unit + API 36 instrumented
-    ├── instrumented-matrix.yml   # Weekly: API 26 + 34
-    └── nightly-youtube.yml       # Self-hosted YouTube regression
+    ├── ci.yml                    # PR: unit + detekt + API 36 instrumented
+    └── instrumented-matrix.yml   # Weekly: API 26, 34, 36
 ```
 
 ### Language & UI stack (confirmed)
@@ -763,8 +762,7 @@ interface BoostEngineProbe {
 |------|----------|------------|------------|
 | Session-0 LoudnessEnhancer deprecated log | Medium | High | Accepted; DynamicsProcessing fallback |
 | OEM rejects high `setTargetGain` | Medium | Medium | Runtime clamp + per-device `effective_max_gain_mb` |
-| Harness passes, YouTube fails | **High** | Medium | Spike validation + GA-blocking YouTube regression; documented gap below |
-| YouTube CI flake | Medium | Medium | Dedicated self-hosted Pixel; 3 retries; flake budget tracked; blocks release if nightly red |
+| Harness passes, YouTube fails | **High** | Medium | Manual spike checklist before release; documented gap below |
 | `specialUse` Play rejection | Medium | Low | Precise FGS subtype declaration |
 
 ### Known harness ↔ product gap
@@ -777,8 +775,8 @@ interface BoostEngineProbe {
 | Anonymized config churn at scale | Partial (vectors) | ✅ |
 | Backgrounded FGS under YouTube | Partial (instrumented Home) | ✅ |
 
-**Merge gate (PR CI):** harness + RMS — proves engine correctness.  
-**Release gate:** green **nightly YouTube regression** on dedicated self-hosted Pixel (`GA_STRICT=true`) within **7 days** of promotion, plus green `instrumented-matrix` (AC-4).
+**Merge gate (PR CI):** harness + RMS — proves engine correctness on emulators.  
+**Release gate:** green `instrumented-matrix` (AC-4) within **7 days** of promotion, plus completed spike sign-off (`docs/spike-signoff.md`) on a physical device.
 
 ---
 
@@ -786,7 +784,7 @@ interface BoostEngineProbe {
 
 (Structured logging, metrics — unchanged.)
 
-**Manual probe dump** (shell — same pattern as YouTube regression script):
+**Manual probe dump** (shell — same pattern as spike checklist):
 
 ```bash
 DEBUG_PKG="com.deciboost.app.debug"
@@ -875,130 +873,13 @@ fun boostSurvivesPauseResume_withAppBackgrounded() {
 | Runner | When | RMS gate | Boost efficacy validated by |
 |--------|------|----------|----------------------------|
 | **CI emulator (AVD)** | `ci.yml` `instrumented-api36`, `instrumented-matrix.yml` API 36 | `rms_ratio >= EMULATOR_MIN_SIGNAL` (**0.05**) — signal-present / Visualizer health only; **not** absolute 0.85 | `target_gain_mb` + `global_effect_enabled` (engine state) |
-| **Physical device / Pixel nightly** | Self-hosted Pixel (`deciboost-youtube`), `GA_STRICT=true` | `rms_ratio >= 0.85` pre/post | `GAIN` + `ENABLED` + RMS |
+| **Physical device (local harness)** | Developer workstation, USB device | `rms_ratio >= DEVICE_MIN_RMS` (**0.85**) when not an AVD | `GAIN` + `ENABLED` + RMS |
 
-> **Why the split:** API 36 AVDs do not expose test-process `HarnessActivity` audio to session-0 `Visualizer` in the app UID reliably, and `LoudnessEnhancer` does not shift session-0 Visualizer RMS measurably on emulators (~1.00× at 150% boost). Emulator merge-blocking therefore proves **probe delivery + engine invariants**, not absolute loudness. Strict `0.85` remains on physical hardware per AC and nightly YouTube regression.
+> **Why the split:** API 36 AVDs do not expose test-process `HarnessActivity` audio to session-0 `Visualizer` in the app UID reliably, and `LoudnessEnhancer` does not shift session-0 Visualizer RMS measurably on emulators (~1.00× at 150% boost). Emulator merge-blocking therefore proves **probe delivery + engine invariants**, not absolute loudness. Strict `0.85` applies only when the harness runs on real hardware locally.
 >
-> **Implementation:** `testing/audio-harness/.../RmsAssertionSupport.kt`, `EmulatorTestSupport.kt` (`EMULATOR_MIN_SIGNAL`, `DEVICE_MIN_RMS`). Emulator harness starts in-process tone via `DebugHarnessTonePlayer` / `DebugHarnessToneReceiver` (`app/src/debug/`). Pixel setup: `docs/runner-setup.md`.
+> **Implementation:** `testing/audio-harness/.../RmsAssertionSupport.kt`, `EmulatorTestSupport.kt` (`EMULATOR_MIN_SIGNAL`, `DEVICE_MIN_RMS`). Emulator harness starts in-process tone via `DebugHarnessTonePlayer` / `DebugHarnessToneReceiver` (`app/src/debug/`). Real YouTube validation is **manual** via Layer 0 (`docs/spike-youtube-checklist.md`).
 
-### Layer 3 — YouTube regression (nightly CI, release-blocking)
-
-**Infrastructure:** dedicated **self-hosted Pixel** runner (labeled `deciboost-youtube` in GitHub Actions). Device runs API 34 or 36, logged-in YouTube, USB-attached to CI host. Nightly job **always** sets `GA_STRICT=true`.
-
-Improved `testing/scripts/youtube_pause_resume_regression.sh`:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-DEBUG_PKG="com.deciboost.app.debug"
-COMPONENT_PREFIX="${DEBUG_PKG}/${DEBUG_PKG}"
-YOUTUBE="com.google.android.youtube"
-VIDEO_URL="${VIDEO_URL:-https://www.youtube.com/shorts/jNQXAC9IVRw}"
-MAX_RETRIES=3
-GA_STRICT="${GA_STRICT:-true}"    # nightly CI default; override false only for local debug
-
-# Probe dump: run-as (app UID) triggers receiver; logcat DeciBoostProbe is source of truth.
-# am broadcast stdout is NOT parsed — it only shows "Broadcast completed".
-dump_probe() {
-  local outfile="$1"
-  adb logcat -c DeciBoostProbe:S 2>/dev/null || adb logcat -c
-  adb shell run-as "$DEBUG_PKG" sh -c \
-    "am broadcast -a com.deciboost.DEBUG.DUMP_BOOST_STATE -n ${COMPONENT_PREFIX}.DebugBoostStateReceiver"
-  sleep 0.5
-  adb logcat -d -s DeciBoostProbe | grep "delivered=true" | tail -1 | tee "$outfile"
-  grep -q "delivered=true" "$outfile"
-}
-
-parse_probe() {
-  local file="$1" prefix="$2"
-  eval "${prefix}_GAIN=\$(grep -o 'target_gain_mb=[0-9]*' \"$file\" | cut -d= -f2)"
-  eval "${prefix}_ENABLED=\$(grep -o 'global_effect_enabled=[a-z]*' \"$file\" | cut -d= -f2)"
-  eval "${prefix}_RMS=\$(grep -o 'rms_ratio=[0-9.]*' \"$file\" | cut -d= -f2)"
-}
-
-for attempt in $(seq 1 $MAX_RETRIES); do
-  adb shell am force-stop "$DEBUG_PKG"
-  adb install -r app/build/outputs/apk/debug/app-debug.apk
-
-  adb shell pm grant "$DEBUG_PKG" android.permission.RECORD_AUDIO
-
-  adb shell am start -n "${COMPONENT_PREFIX}.BoostTrampolineActivity" \
-    -a com.deciboost.SET_BOOST --ei boost 150
-  sleep 2
-
-  adb shell am start -a android.intent.action.VIEW -d "$VIDEO_URL" "$YOUTUBE"
-  for i in $(seq 1 30); do
-    adb shell dumpsys audio | grep -q "player state: started" && break
-    sleep 1
-  done
-
-  FOCUS=$(adb shell dumpsys audio | grep -i "focus" | head -5)
-  echo "focus: $FOCUS"
-
-  dump_probe /tmp/pre.txt || { echo "pre dump failed (receiver not delivered)"; continue; }
-  parse_probe /tmp/pre.txt PRE
-
-  adb shell input keyevent KEYCODE_MEDIA_PAUSE
-  sleep 2
-  adb shell input keyevent KEYCODE_MEDIA_PLAY
-  sleep 3
-
-  dump_probe /tmp/post.txt || { echo "post dump failed (receiver not delivered)"; continue; }
-  parse_probe /tmp/post.txt POST
-
-  adb shell dumpsys media.audio_flinger | grep -i "LoudnessEnhancer" | tee /tmp/flinger.txt
-
-  PROBE_OK=false
-  if [[ "$PRE_GAIN" == "$POST_GAIN" && "$POST_ENABLED" == "true" ]]; then
-    PROBE_OK=true
-  fi
-
-  RMS_OK=true
-  if [[ "$GA_STRICT" == "true" ]]; then
-    if [[ -n "$PRE_RMS" && -n "$POST_RMS" ]] && \
-       awk "BEGIN {exit !($PRE_RMS >= 0.85 && $POST_RMS >= 0.85)}"; then
-      RMS_OK=true
-    else
-      RMS_OK=false
-    fi
-  fi
-
-  if [[ "$PROBE_OK" == "true" && "$RMS_OK" == "true" ]]; then
-    echo "PASS attempt $attempt (gain=$PRE_GAIN rms_pre=$PRE_RMS rms_post=$POST_RMS ga_strict=$GA_STRICT)"
-    exit 0
-  fi
-  echo "Retry $attempt failed (probe=$PROBE_OK rms=$RMS_OK pre=$PRE_GAIN post=$POST_GAIN rms_post=$POST_RMS)"
-  sleep 5
-done
-echo "FAIL after $MAX_RETRIES attempts"; exit 1
-```
-
-**Modes:**
-
-| Mode | `GA_STRICT` | When used | PASS requires |
-|------|-------------|-----------|---------------|
-| **PR merge gate (emulator CI)** | N/A | `ci.yml` / `instrumented-matrix.yml` AVD | `GAIN` + `ENABLED` + `rms_ratio >= 0.05` (signal-present); see Layer 2 RMS policy |
-| **Nightly CI (default)** | `true` | Dedicated Pixel runner | `GAIN` + `ENABLED` + `rms_ratio >= 0.85` pre/post |
-| Local debug | `false` | Developer workstation only | `GAIN` + `ENABLED` only; RMS logged |
-
-**Expected flake rate:** <5% on dedicated Pixel with logged-in YouTube. Nightly is **release-blocking** (not manual-only).
-
-```yaml
-# .github/workflows/nightly-youtube.yml
-on:
-  schedule: [{ cron: "0 4 * * *" }]   # nightly 04:00 UTC
-  push:
-    branches: ["release/*"]
-  workflow_dispatch:
-
-jobs:
-  youtube-regression:
-    runs-on: [self-hosted, deciboost-youtube]   # dedicated Pixel
-    steps:
-      - run: GA_STRICT=true ./testing/scripts/youtube_pause_resume_regression.sh
-```
-
-### Layer 4 — CI matrix
+### Layer 3 — CI matrix
 
 ```yaml
 # build.gradle.kts — detekt wired for all subprojects
@@ -1045,7 +926,6 @@ jobs:
 | `unit` | Every PR | N/A | ✅ |
 | `instrumented-api36` | Every PR | 36 | ✅ |
 | `instrumented-matrix` | Weekly + `release/*` + pre-release | 26, 34, 36 | ✅ for AC-4 |
-| `youtube-regression` | **Nightly** + `release/*` | Dedicated self-hosted Pixel | **Release-blocking** (`GA_STRICT=true`) |
 | `lint-detekt` | Every PR | N/A | ✅ |
 
 **AC-4 release policy:** No promotion to **internal**, **closed**, or **production** tracks unless `instrumented-matrix` (API 26 + 34 + 36) is green **within the last 7 days**, or the branch is `release/*` and the matrix run triggered by that branch is green. Weekly schedule alone is insufficient if a Tuesday PR merges and Friday build promotes without a fresh matrix.
@@ -1065,11 +945,11 @@ on:
 
 | # | Criterion | Verified by |
 |---|-----------|-------------|
-| AC-1 | `global_effect_enabled == true` within **1.5 s** after pause/resume | Layer 2 + Layer 3 |
-| AC-2 | `target_gain_mb` unchanged ± **0** | Layer 2 + Layer 3 |
-| AC-3 | DeciBoost backgrounded, AC-1 holds | Layer 2 (`pressHome`) + Layer 3 |
+| AC-1 | `global_effect_enabled == true` within **1.5 s** after pause/resume | Layer 2 (harness) + Layer 0 (manual spike) |
+| AC-2 | `target_gain_mb` unchanged ± **0** | Layer 2 + Layer 0 |
+| AC-3 | DeciBoost backgrounded, AC-1 holds | Layer 2 (`pressHome`) + Layer 0 |
 | AC-4 | Harness passes API **26, 34, 36** | Weekly matrix |
-| AC-5 | YouTube regression passes on **dedicated self-hosted Pixel** (`GA_STRICT=true`) | Nightly CI (Layer 3) |
+| AC-5 | YouTube pause/resume validated on a physical device | Manual spike (`docs/spike-signoff.md`) |
 
 ---
 
@@ -1078,8 +958,8 @@ on:
 | Phase | Audience | Max boost | Safety UX | Release gates |
 |-------|----------|-----------|-----------|---------------|
 | **Alpha** | Internal testers | **200%** | Dialog at >100%, ≥175%, 200% | Harness green on API 36 |
-| **Beta** | Closed test track | **200%** | Same dialogs + Settings hearing warning | Nightly YouTube green + matrix within 7 days |
-| **GA** | Production | **200%** | Same (no cap increase at GA) | Nightly YouTube (`GA_STRICT=true`) + matrix within 7 days |
+| **Beta** | Closed test track | **200%** | Same dialogs + Settings hearing warning | Matrix green within 7 days + spike sign-off |
+| **GA** | Production | **200%** | Same (no cap increase at GA) | Matrix within 7 days + spike sign-off |
 
 > **User decision:** No staged cap (no 150% default, no 175% beta ceiling). Full 200% marketing promise from day one, mitigated by safety dialogs — not by reducing the slider maximum.
 
@@ -1094,8 +974,7 @@ on:
 - **Gradle**: AGP 8.7+, Kotlin 2.0+, KSP for Hilt
 - **Emulator**: `reactivecircus/android-emulator-runner@v2`, `ram-size: 4096`, `-no-snapshot-save`
 - **Flaky retries**: `--rerun-tasks` + instrumentation retry 2 on matrix jobs
-- **Release gate**: Play App Signing; internal/closed/production promotion requires (1) green `instrumented-matrix` within 7 days, (2) green **nightly YouTube** on dedicated Pixel (`GA_STRICT=true`) within 7 days, (3) spike sign-off on file
-- **Self-hosted runner**: one dedicated Pixel (label `deciboost-youtube`), maintained with YouTube login, `adb` over USB, screen-on policy
+- **Release gate**: internal/closed/production promotion requires (1) green `instrumented-matrix` within 7 days, (2) completed spike sign-off on a physical device (`docs/spike-signoff.md`)
 
 ---
 
@@ -1123,7 +1002,7 @@ on:
 | `testing/audio-harness/.../HarnessActivity.kt` | Test APK activity |
 | `testing/audio-harness/.../BoostProbeClient.kt` | Cross-process probe via ordered broadcast |
 | `testing/audio-harness/.../PauseResumeBoostInstrumentedTest.kt` | Merge-blocking test (incl. `pressHome`) |
-| `testing/scripts/youtube_pause_resume_regression.sh` | GA YouTube regression |
+| `testing/scripts/run_emulator_tests.sh` | Local emulator harness runner |
 | `testing/vectors/playback_sequences.json` | FSM unit test vectors |
 
 ---
@@ -1133,7 +1012,7 @@ on:
 | # | Question | Decision | Date |
 |---|----------|----------|------|
 | 1 | Max boost cap for GA | **200% from day one** (alpha/beta/GA); safety dialogs at >100%, ≥175%, and 200% — not a reduced slider cap | 2026-06-25 |
-| 2 | YouTube regression testing | **Dedicated self-hosted Pixel** in nightly CI with **`GA_STRICT=true`**; release-blocking, not manual-only | 2026-06-25 |
+| 2 | YouTube regression testing | **Manual spike** on a physical device before release (`docs/spike-youtube-checklist.md`); no dedicated hardware CI | 2026-06-25 (updated) |
 | 3 | Language & UI stack | **Kotlin + Jetpack Compose + Material 3** — confirmed | 2026-06-25 |
 
 ## Open Questions
@@ -1163,7 +1042,7 @@ on:
 |----------|-----------|
 | **Kotlin + Compose + Material 3** | **User-confirmed** stack; API 36 edge-to-edge |
 | **200% max boost from day one** | User decision; safety dialogs instead of staged cap (no 175% beta ceiling) |
-| **Dedicated Pixel nightly YouTube CI** | User decision; `GA_STRICT=true` always; release-blocking |
+| **Manual YouTube spike before release** | No self-hosted hardware CI; emulator harness is the automated gate |
 | **`applicationId = com.deciboost.app`** | Consistent with test scripts and namespace |
 | **`minSdk 26`, `targetSdk 36`** | `AudioPlaybackCallback`; primary target API 36 |
 | **Policy/android layer split + `:testing:fakes`** | Real JVM tests; Android effects only in adapter |
@@ -1175,8 +1054,8 @@ on:
 | **Shell probe via `run-as` + logcat** | `exported=false` safe; logcat `DeciBoostProbe` is shell source of truth |
 | **`COMPONENT_PREFIX` for debug components** | Avoids `.debug.*` / `applicationId` resolution bug |
 | **Spike validation before release** | Fail-fast on YouTube hypothesis (ongoing release gate) |
-| **Harness merge-blocking; YouTube nightly release-blocking** | Honest gates — harness ≠ YouTube; Pixel nightly is not manual-only |
-| **Layered RMS assertion in harness** | Emulator CI: signal-present (0.05) + engine state; physical/Pixel: absolute >= 0.85 — probe-only tests insufficient |
+| **Harness merge-blocking; manual spike before release** | Emulator CI proves engine invariants; real YouTube validated manually |
+| **Layered RMS assertion in harness** | Emulator CI: signal-present (0.05) + engine state; physical device local runs: absolute >= 0.85 |
 | **Local DataStore kill switch (v1)** | No Remote Config infrastructure in v1 |
 | **Boot restores preference only; user confirms boost** | Hearing safety + FGS restrictions |
 | **Adaptive layouts for sw≥600dp** | API 36 large-screen requirement |
@@ -1233,15 +1112,15 @@ All planned PRs are **implemented** as of v1.0.0-alpha. The sections below docum
 - **Dependencies:** PR 8
 - **Description:** Settings UI for engine flags; `RECORD_AUDIO` opt-in visualizer; mandatory safety dialogs for full 200% cap from alpha onward.
 
-### PR 10: YouTube nightly CI + weekly API matrix
-- **Files:** `youtube_pause_resume_regression.sh`, `nightly-youtube.yml` (self-hosted Pixel label `deciboost-youtube`, `GA_STRICT=true`), `instrumented-matrix.yml`, runner setup docs
+### PR 10: Weekly API matrix
+- **Files:** `instrumented-matrix.yml`
 - **Dependencies:** PR 7
-- **Description:** Dedicated Pixel nightly regression (release-blocking); weekly + `release/*` AC-4 matrix.
+- **Description:** Weekly + `release/*` AC-4 matrix on GitHub-hosted emulators.
 
 ### PR 11: Release hardening
 - **Files:** `:benchmark/**`, ProGuard, Play metadata, 16 KB alignment, themed icon, safety dialogs for 200% cap
 - **Dependencies:** **PR 7 + PR 9 + PR 10**
-- **Description:** Store-ready; 200% max from launch; release gated on nightly YouTube + matrix green.
+- **Description:** Store-ready; 200% max from launch; release gated on matrix green + manual spike sign-off.
 
 ---
 

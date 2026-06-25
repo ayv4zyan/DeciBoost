@@ -30,8 +30,8 @@ object RmsAssertionSupport {
      * Emulator AVDs: session-0 Visualizer RMS does not shift measurably when
      * LoudnessEnhancer applies gain (observed ~1.00x ratio at 150% boost). Emulator CI
      * validates boost via engine state (target_gain_mb, global_effect_enabled) plus
-     * [assertSnapshotSignalPresent] for probe health. Strict 0.85 + ratio gates run on
-     * the self-hosted Pixel nightly per docs/runner-setup.md.
+     * [assertSnapshotSignalPresent] for probe health. On physical devices (local runs),
+     * [assertBoostRatio] also enforces absolute RMS >= [EmulatorTestSupport.DEVICE_MIN_RMS].
      */
     fun assertBoostRatio(baselineRms: Float, boostedRms: Float) {
         if (EmulatorTestSupport.isEmulator()) {

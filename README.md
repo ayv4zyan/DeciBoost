@@ -35,7 +35,7 @@ Android caps `STREAM_MUSIC` at 100%. DeciBoost uses **`LoudnessEnhancer`** and *
 - **Material 3 UI** — Jetpack Compose, edge-to-edge, adaptive layouts for tablets
 - **Optional waveform visualizer** — opt-in `RECORD_AUDIO` for live output feedback
 - **Safe boot restore** — notification to confirm boost after reboot (no silent auto-boost)
-- **Tested in CI** — instrumented harness + nightly YouTube regression on physical hardware
+- **Tested in CI** — instrumented harness on emulators (API 26, 34, 36)
 
 ---
 
@@ -121,13 +121,11 @@ Debug package: `com.deciboost.app.debug`
 ./gradlew :testing:audio-harness:connectedDebugAndroidTest  # Emulator harness
 ```
 
-### Manual YouTube regression (physical device)
+### Manual YouTube validation (physical device, optional)
 
-```bash
-GA_STRICT=true ./testing/scripts/youtube_pause_resume_regression.sh
-```
+Before a release, walk through [`docs/spike-youtube-checklist.md`](docs/spike-youtube-checklist.md) on a real phone with YouTube installed and record results in [`docs/spike-signoff.md`](docs/spike-signoff.md).
 
-See also: [`docs/spike-youtube-checklist.md`](docs/spike-youtube-checklist.md), [`docs/runner-setup.md`](docs/runner-setup.md), [`DESIGN.md`](DESIGN.md).
+See also: [`DESIGN.md`](DESIGN.md).
 
 ---
 
@@ -173,8 +171,8 @@ DeciBoost/
 │   └── settings/           # Settings, onboarding, safety UX
 ├── testing/
 │   ├── audio-harness/      # Instrumented pause/resume tests
-│   └── scripts/            # YouTube regression (adb)
-└── docs/                   # Privacy, spike checklist, runner setup, Play declarations
+│   └── scripts/            # Local emulator test helpers
+└── docs/                   # Privacy, spike checklist, Play declarations
 ```
 
 ---

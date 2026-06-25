@@ -43,5 +43,4 @@ _Optional: OEM quirks, network conditions, or follow-up actions._
 |------|------|-------|
 | Emulator harness | Every push to `main` | `.github/workflows/ci.yml` (`instrumented-api36`) |
 | API matrix | Weekly + `release/*` | `.github/workflows/instrumented-matrix.yml` |
-| YouTube nightly | Scheduled | `.github/workflows/nightly-youtube.yml` (`GA_STRICT=true`) |
-| Spike sign-off | Before Play promotion | This document |
+| Spike sign-off | Before Play promotion (manual) | This document |
