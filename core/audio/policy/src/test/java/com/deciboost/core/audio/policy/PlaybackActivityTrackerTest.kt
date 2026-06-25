@@ -1,6 +1,7 @@
 package com.deciboost.core.audio.policy
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -48,9 +49,9 @@ class PlaybackActivityTrackerTest {
     fun `bluetooth route triggers recreate`() {
         tracker.onMusicActiveChanged(true)
         tracker.onConfigChanged(ConfigSnapshot(2, 1))
+        recreateCount = 0
         tracker.onDeviceChanged()
-        assertTrue(recreateCount >= 1)
-        assertTrue(reapplyCount >= 1)
+        assertEquals(1, recreateCount)
     }
 
     @Test
@@ -69,7 +70,7 @@ class PlaybackActivityTrackerTest {
     }
 
     @Test
-    fun `notification dominant vector at 150 guard blocks tracker reapplies`() {
+    fun `notification dominant with music active does not block tracker reapplies`() {
         val guard = NonMediaPlaybackGuard(enabled = true)
         val configs = listOf(
             ConfigSnapshot(1, 5, hasMediaUsage = false, hasNotificationUsage = true),
@@ -77,9 +78,10 @@ class PlaybackActivityTrackerTest {
         )
         var effectiveReapplies = 0
         var activeConfigs = emptyList<ConfigSnapshot>()
-        val notificationTracker = PlaybackActivityTracker(
+        lateinit var notificationTracker: PlaybackActivityTracker
+        notificationTracker = PlaybackActivityTracker(
             onReapply = {
-                if (!guard.shouldSuspendBoost(activeConfigs)) {
+                if (!guard.shouldSuspendBoost(activeConfigs, isMusicActive = notificationTracker.isMusicActive())) {
                     effectiveReapplies++
                 }
             },
@@ -89,13 +91,13 @@ class PlaybackActivityTrackerTest {
         notificationTracker.setBoostPercent(150)
         configs.forEach { config ->
             activeConfigs = listOf(config)
-            assertTrue(guard.shouldSuspendBoost(activeConfigs))
+            assertFalse(guard.shouldSuspendBoost(activeConfigs, isMusicActive = true))
             notificationTracker.onConfigChanged(config)
             notificationTracker.onMusicActiveChanged(true)
             now += 50
             notificationTracker.onTick()
         }
-        assertEquals(0, effectiveReapplies)
+        assertTrue(effectiveReapplies >= 1)
     }
 
     @Test
@@ -184,6 +186,113 @@ class PlaybackActivityTrackerTest {
     fun `notification_dominant vector from JSON`() {
         val vector = PlaybackVectorLoader.loadVectors("notification_dominant").single()
         PlaybackVectorRunner.assertVector(vector)
+    }
+
+    @Test
+    fun `trailing-edge debounce delivers latest snapshot after burst`() {
+        tracker.onMusicActiveChanged(true)
+        reapplyCount = 0
+        tracker.onConfigChanged(ConfigSnapshot(1, 1))
+        now += 30
+        tracker.onConfigChanged(ConfigSnapshot(2, 2))
+        now += 30
+        tracker.onConfigChanged(ConfigSnapshot(1, 3))
+        now += 30
+        tracker.onTick()
+        assertEquals(0, reapplyCount)
+
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+        assertEquals(1, reapplyCount)
+        assertEquals(ConfigSnapshot(1, 3), tracker.lastConfigForTest())
+    }
+
+    @Test
+    fun `debounce deadline extends while burst continues`() {
+        tracker.onMusicActiveChanged(true)
+        reapplyCount = 0
+        tracker.onConfigChanged(ConfigSnapshot(1, 1))
+        now += 50
+        tracker.onConfigChanged(ConfigSnapshot(2, 2))
+        now += 80
+        tracker.onTick()
+        assertEquals(0, reapplyCount)
+
+        now += 30
+        tracker.onTick()
+        assertEquals(1, reapplyCount)
+        assertEquals(ConfigSnapshot(2, 2), tracker.lastConfigForTest())
+    }
+
+    @Test
+    fun `stale frame during debounce does not cancel pending snapshot`() {
+        tracker.onMusicActiveChanged(true)
+        tracker.onConfigChanged(ConfigSnapshot(2, 1))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+        assertEquals(ConfigSnapshot(2, 1), tracker.lastConfigForTest())
+
+        reapplyCount = 0
+        tracker.onConfigChanged(ConfigSnapshot(1, 3))
+        now += 30
+        tracker.onConfigChanged(ConfigSnapshot(2, 1))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+
+        assertEquals(1, reapplyCount)
+        assertEquals(ConfigSnapshot(1, 3), tracker.lastConfigForTest())
+    }
+
+    @Test
+    fun `config reapply suppressed when phase is not active`() {
+        tracker.onMusicActiveChanged(true)
+        reapplyCount = 0
+        tracker.onMusicActiveChanged(false)
+        now += PlaybackActivityTracker.PAUSE_HOLD_MS + 10
+        tracker.onTick()
+        assertEquals(PlaybackPhase.Paused, tracker.phase.value)
+
+        tracker.onConfigChanged(ConfigSnapshot(2, 5))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+        assertEquals(0, reapplyCount)
+    }
+
+    @Test
+    fun `periodic recreate fires after active stale interval`() {
+        tracker.onMusicActiveChanged(true)
+        tracker.onConfigChanged(ConfigSnapshot(1, 1))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+
+        val reappliesBeforePeriodic = reapplyCount
+        val recreatesBeforePeriodic = recreateCount
+        now += PlaybackActivityTracker.ACTIVE_STALE_RECREATE_MS
+        tracker.onTick()
+
+        assertEquals(recreatesBeforePeriodic, recreateCount)
+        assertEquals(reappliesBeforePeriodic + 1, reapplyCount)
+    }
+
+    @Test
+    fun `recovering exhaustion triggers release and recreate`() {
+        tracker.onMusicActiveChanged(true)
+        tracker.onConfigChanged(ConfigSnapshot(1, 1))
+        tracker.onMusicActiveChanged(false)
+        now += PlaybackActivityTracker.PAUSE_HOLD_MS + 10
+        tracker.onTick()
+        assertEquals(PlaybackPhase.Paused, tracker.phase.value)
+
+        recreateCount = 0
+        tracker.onMusicActiveChanged(true)
+        assertEquals(PlaybackPhase.Recovering, tracker.phase.value)
+
+        repeat(PlaybackActivityTracker.MAX_RECOVERING_RETRIES) {
+            now += PlaybackActivityTracker.RECOVERING_TIMEOUT_MS + 1
+            tracker.onTick()
+        }
+        assertEquals(PlaybackPhase.Paused, tracker.phase.value)
+        assertEquals(1, recreateCount)
     }
 
     @Test

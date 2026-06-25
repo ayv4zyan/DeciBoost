@@ -18,15 +18,16 @@ class NonMediaPlaybackGuard(
         }
     }
 
-    fun shouldSuspendBoost(configs: List<ConfigSnapshot>): Boolean {
+    fun shouldSuspendBoost(configs: List<ConfigSnapshot>, isMusicActive: Boolean = false): Boolean {
+        if (isMusicActive) return false
         if (!enabled || configs.isEmpty()) return false
         val hasMedia = configs.any { it.hasMediaUsage }
         if (hasMedia) return false
         return configs.any { it.hasNotificationUsage || it.hasAssistanceUsage }
     }
 
-    fun evaluate(configs: List<ConfigSnapshot>): GuardAction {
-        val shouldSuspend = shouldSuspendBoost(configs)
+    fun evaluate(configs: List<ConfigSnapshot>, isMusicActive: Boolean = false): GuardAction {
+        val shouldSuspend = shouldSuspendBoost(configs, isMusicActive)
         return when {
             shouldSuspend && !suspended -> {
                 suspended = true

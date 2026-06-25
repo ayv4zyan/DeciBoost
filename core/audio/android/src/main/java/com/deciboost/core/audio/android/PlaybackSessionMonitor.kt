@@ -10,6 +10,7 @@ import com.deciboost.core.audio.policy.ConfigSnapshot
 
 class PlaybackSessionMonitor(
     context: Context,
+    private val enableCallbacks: Boolean = true,
 ) {
     interface Listener {
         fun onMusicActiveChanged(isMusicActive: Boolean)
@@ -34,6 +35,7 @@ class PlaybackSessionMonitor(
 
     fun start() {
         monitorHandler.post {
+            if (!enableCallbacks) return@post
             audioManager.registerAudioPlaybackCallback(playbackCallback, monitorHandler)
             lastMusicActive = audioManager.isMusicActive
             listener?.onMusicActiveChanged(lastMusicActive)
@@ -105,6 +107,19 @@ class PlaybackSessionMonitor(
     fun shutdown() {
         stop()
         monitorThread.quitSafely()
+    }
+
+    internal fun testDispatchMusicActiveChanged(isMusicActive: Boolean) {
+        monitorHandler.post {
+            lastMusicActive = isMusicActive
+            listener?.onMusicActiveChanged(isMusicActive)
+        }
+    }
+
+    internal fun testDispatchConfigsChanged(configs: List<ConfigSnapshot>) {
+        monitorHandler.post {
+            listener?.onConfigsChanged(configs)
+        }
     }
 
     private companion object {

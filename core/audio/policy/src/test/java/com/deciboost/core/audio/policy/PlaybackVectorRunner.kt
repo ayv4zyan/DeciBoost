@@ -15,9 +15,10 @@ object PlaybackVectorRunner {
         var recreateCount = 0
         val guard = NonMediaPlaybackGuard(enabled = true)
         var activeConfigs = emptyList<ConfigSnapshot>()
-        val tracker = PlaybackActivityTracker(
+        lateinit var tracker: PlaybackActivityTracker
+        tracker = PlaybackActivityTracker(
             onReapply = {
-                if (!guard.shouldSuspendBoost(activeConfigs)) {
+                if (!guard.shouldSuspendBoost(activeConfigs, isMusicActive = tracker.isMusicActive())) {
                     reapplyCount++
                 }
             },

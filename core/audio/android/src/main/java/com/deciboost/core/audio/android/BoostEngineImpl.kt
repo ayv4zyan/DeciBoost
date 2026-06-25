@@ -36,6 +36,10 @@ class BoostEngineImpl(
     private var pauseOnNonMedia = true
     private var suspendedForNonMedia = false
     private var lastReapplyReason = ReapplyReason.SERVICE_START
+    private var consecutiveWatchdogFailures = 0
+    private var watchdogRecoveryInProgress = false
+    private var lastPlaybackConfigs: List<ConfigSnapshot> = emptyList()
+    private var skipNextPlaybackActiveReapply = false
 
     private val stateRef = AtomicReference(BoostState())
     private val effectHealthRef = AtomicReference(EffectHealthSnapshot())
@@ -43,7 +47,13 @@ class BoostEngineImpl(
     private var idleShutdownListener: ((Int) -> Unit)? = null
 
     private val activityTracker = PlaybackActivityTracker(
-        onReapply = { reason -> forceReapply(reason) },
+        onReapply = { reason ->
+            if (reason == ReapplyReason.PLAYBACK_ACTIVE && skipNextPlaybackActiveReapply) {
+                skipNextPlaybackActiveReapply = false
+                return@PlaybackActivityTracker
+            }
+            forceReapply(reason)
+        },
         onReleaseAndRecreate = { releaseAndRecreateGlobalEffects() },
         onIdleShutdown = { boostPercent -> idleShutdownListener?.invoke(boostPercent) },
     )
@@ -53,11 +63,22 @@ class BoostEngineImpl(
     init {
         playbackMonitor.listener = object : PlaybackSessionMonitor.Listener {
             override fun onMusicActiveChanged(isMusicActive: Boolean) {
-                engineHandler.post { activityTracker.onMusicActiveChanged(isMusicActive) }
+                engineHandler.post {
+                    if (isMusicActive) {
+                        val guardAction = evaluateNonMediaGuard(
+                            lastPlaybackConfigs,
+                            isMusicActive = true,
+                        )
+                        skipNextPlaybackActiveReapply =
+                            guardAction == NonMediaPlaybackGuard.GuardAction.Resume
+                    }
+                    activityTracker.onMusicActiveChanged(isMusicActive)
+                }
             }
 
             override fun onConfigsChanged(configs: List<ConfigSnapshot>) {
                 engineHandler.post {
+                    lastPlaybackConfigs = configs
                     val snapshot = if (configs.isEmpty()) {
                         ConfigSnapshot(count = 0, usageHash = 0)
                     } else {
@@ -93,7 +114,29 @@ class BoostEngineImpl(
                     health.globalTargetGainMb >= expectedMb - GAIN_TOLERANCE_MB
             }
             if (!healthy) {
-                forceReapply(ReapplyReason.WATCHDOG)
+                if (!watchdogRecoveryInProgress) {
+                    watchdogRecoveryInProgress = true
+                    consecutiveWatchdogFailures++
+                    if (consecutiveWatchdogFailures >= WATCHDOG_FAILURES_BEFORE_FORCE_RECREATE) {
+                        consecutiveWatchdogFailures = 0
+                        engineHandler.post {
+                            registry.releaseAndRecreate(SessionEffectRegistry.GLOBAL_SESSION)
+                            if (currentBoost.value > 100 && !suspendedForNonMedia) {
+                                applyBoostInternal(ReapplyReason.WATCHDOG, retryAttempt = 0)
+                            } else {
+                                watchdogRecoveryInProgress = false
+                            }
+                        }
+                    } else {
+                        engineHandler.post {
+                            registry.releaseAndRecreate(SessionEffectRegistry.GLOBAL_SESSION)
+                            applyBoostInternal(ReapplyReason.WATCHDOG, retryAttempt = 0)
+                        }
+                    }
+                }
+            } else {
+                consecutiveWatchdogFailures = 0
+                watchdogRecoveryInProgress = false
             }
             healthy
         }
@@ -188,6 +231,9 @@ class BoostEngineImpl(
             ReapplyReason.WATCHDOG,
             ReapplyReason.NON_MEDIA_RESUME,
             -> true
+            ReapplyReason.SERVICE_START,
+            ReapplyReason.USER_SLIDER,
+            -> currentBoost.value > 100
             else -> false
         }
 
@@ -244,6 +290,10 @@ class BoostEngineImpl(
             activityTracker.markReapplySuccess()
         }
 
+        if (reason == ReapplyReason.WATCHDOG) {
+            watchdogRecoveryInProgress = false
+        }
+
         updateState {
             it.copy(
                 boostPercent = currentBoost,
@@ -257,18 +307,23 @@ class BoostEngineImpl(
         }
     }
 
-    private fun evaluateNonMediaGuard(configs: List<ConfigSnapshot>) {
-        if (!pauseOnNonMedia) return
-        when (nonMediaGuard.evaluate(configs)) {
+    private fun evaluateNonMediaGuard(
+        configs: List<ConfigSnapshot>,
+        isMusicActive: Boolean = activityTracker.isMusicActive(),
+    ): NonMediaPlaybackGuard.GuardAction {
+        if (!pauseOnNonMedia) return NonMediaPlaybackGuard.GuardAction.None
+        return when (nonMediaGuard.evaluate(configs, isMusicActive)) {
             NonMediaPlaybackGuard.GuardAction.Suspend -> {
                 suspendedForNonMedia = true
                 applyBoostInternal(ReapplyReason.NON_MEDIA_SUSPEND, retryAttempt = 0)
+                NonMediaPlaybackGuard.GuardAction.Suspend
             }
             NonMediaPlaybackGuard.GuardAction.Resume -> {
                 suspendedForNonMedia = false
                 applyBoostInternal(ReapplyReason.NON_MEDIA_RESUME, retryAttempt = 0)
+                NonMediaPlaybackGuard.GuardAction.Resume
             }
-            NonMediaPlaybackGuard.GuardAction.None -> Unit
+            NonMediaPlaybackGuard.GuardAction.None -> NonMediaPlaybackGuard.GuardAction.None
         }
     }
 
@@ -311,5 +366,6 @@ class BoostEngineImpl(
         private const val MAX_RETRY_ATTEMPTS = 3
         private const val RETRY_DELAY_MS = 50L
         private const val GAIN_TOLERANCE_MB = 0
+        private const val WATCHDOG_FAILURES_BEFORE_FORCE_RECREATE = 2
     }
 }

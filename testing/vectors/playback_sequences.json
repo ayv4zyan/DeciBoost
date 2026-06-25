@@ -39,7 +39,7 @@
         {"count": 1, "usageHash": 5, "hasMediaUsage": false, "hasNotificationUsage": true}
       ],
       "boost_percent": 150,
-      "expected_min_reapplies": 0,
+      "expected_min_reapplies": 1,
       "expected_final_phase": "Active"
     }
   ]

@@ -23,6 +23,10 @@ class PlaybackActivityTracker(
     private var reapplyCount = 0
     private var lastIdleEligibleAtMs: Long? = null
     private var idleShutdownFired = false
+    private var pendingConfig: ConfigSnapshot? = null
+    private var pendingConfigDeadlineMs: Long? = null
+    private var activePhaseEnteredAtMs: Long? = null
+    private var lastPeriodicRecreateAtMs: Long? = null
 
     fun setBoostPercent(percent: Int) {
         currentBoostPercent = percent
@@ -53,34 +57,30 @@ class PlaybackActivityTracker(
 
     fun onConfigChanged(snapshot: ConfigSnapshot) {
         val configDiff = diff(lastConfig, snapshot)
-        lastConfig = snapshot
-        if (configDiff.kind == ConfigDiffKind.NONE) return
-
-        val changedAt = nowMs()
-        val previousChangeAt = lastConfigChangeAtMs
-        if (previousChangeAt != null && changedAt - previousChangeAt < CONFIG_DEBOUNCE_MS) {
+        if (configDiff.kind == ConfigDiffKind.NONE) {
+            if (pendingConfig == null || snapshot == pendingConfig) {
+                pendingConfig = null
+                pendingConfigDeadlineMs = null
+            }
             return
         }
-        lastConfigChangeAtMs = changedAt
 
-        if (_phase.value == PlaybackPhase.Idle && snapshot.count > 0) {
-            transitionTo(PlaybackPhase.Active)
-        }
-
-        if (currentBoostPercent > 100 && _phase.value == PlaybackPhase.Active) {
-            triggerReapply(ReapplyReason.PLAYBACK_CONFIG_CHANGED)
-        }
+        pendingConfig = snapshot
+        pendingConfigDeadlineMs = nowMs() + CONFIG_DEBOUNCE_MS
     }
 
     fun onDeviceChanged() {
         onReleaseAndRecreate()
-        if (currentBoostPercent > 100) {
-            triggerReapply(ReapplyReason.DEVICE_CHANGED)
-        }
     }
+
+    fun isMusicActive(): Boolean = lastMusicActive
+
+    internal fun lastConfigForTest(): ConfigSnapshot? = lastConfig
 
     fun onTick() {
         val now = nowMs()
+        processPendingConfigIfDue(now)
+        maybePeriodicRecreate(now)
         val inactiveSince = lastMusicInactiveAtMs
         if (!lastMusicActive && inactiveSince != null) {
             if (now - inactiveSince >= PAUSE_HOLD_MS &&
@@ -96,6 +96,7 @@ class PlaybackActivityTracker(
                 recoveringRetries++
                 if (recoveringRetries >= MAX_RECOVERING_RETRIES) {
                     recoveringStartedAtMs = null
+                    onReleaseAndRecreate()
                     transitionTo(PlaybackPhase.Paused)
                 } else {
                     recoveringStartedAtMs = now
@@ -176,8 +177,49 @@ class PlaybackActivityTracker(
     private fun snapshotIndicatesActivity(): Boolean =
         (lastConfig?.count ?: 0) > 0 || lastMusicActive
 
+    private fun processPendingConfigIfDue(now: Long) {
+        val deadline = pendingConfigDeadlineMs ?: return
+        if (now < deadline) return
+
+        val snapshot = pendingConfig ?: return
+        pendingConfig = null
+        pendingConfigDeadlineMs = null
+
+        val configDiff = diff(lastConfig, snapshot)
+        lastConfig = snapshot
+        lastConfigChangeAtMs = now
+        if (configDiff.kind == ConfigDiffKind.NONE) return
+
+        if (_phase.value == PlaybackPhase.Idle && snapshot.count > 0) {
+            transitionTo(PlaybackPhase.Active)
+        }
+
+        if (currentBoostPercent > 100 && _phase.value == PlaybackPhase.Active) {
+            triggerReapply(ReapplyReason.PLAYBACK_CONFIG_CHANGED)
+        }
+    }
+
+    private fun maybePeriodicRecreate(now: Long) {
+        if (currentBoostPercent <= 100 || _phase.value != PlaybackPhase.Active) return
+
+        val enteredAt = activePhaseEnteredAtMs ?: return
+        val lastRecreate = lastPeriodicRecreateAtMs ?: enteredAt
+        if (now - lastRecreate < ACTIVE_STALE_RECREATE_MS) return
+
+        lastPeriodicRecreateAtMs = now
+        triggerReapply(ReapplyReason.PLAYBACK_ACTIVE)
+    }
+
     private fun transitionTo(phase: PlaybackPhase) {
+        val previous = _phase.value
         _phase.value = phase
+        if (phase == PlaybackPhase.Active && previous != PlaybackPhase.Active) {
+            activePhaseEnteredAtMs = nowMs()
+            lastPeriodicRecreateAtMs = null
+        } else if (phase != PlaybackPhase.Active) {
+            activePhaseEnteredAtMs = null
+            lastPeriodicRecreateAtMs = null
+        }
     }
 
     private fun triggerReapply(reason: ReapplyReason) {
@@ -191,5 +233,6 @@ class PlaybackActivityTracker(
         const val MAX_RECOVERING_RETRIES = 3
         const val RECOVERING_TIMEOUT_MS = 1500L
         const val IDLE_TIMEOUT_MS = 5 * 60 * 1000L
+        const val ACTIVE_STALE_RECREATE_MS = 12 * 60 * 1000L
     }
 }
