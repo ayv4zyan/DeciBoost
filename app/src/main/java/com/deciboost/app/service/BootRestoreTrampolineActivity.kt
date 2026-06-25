@@ -2,7 +2,7 @@ package com.deciboost.app.service
 
 import android.app.ForegroundServiceStartNotAllowedException
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import com.deciboost.core.data.BoostPreferences
 import com.deciboost.core.domain.BoostController
@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
  * Transparent trampoline so boot-restore FGS start runs from a foreground Activity context (API 34+).
  */
 @AndroidEntryPoint
-class BootRestoreTrampolineActivity : AppCompatActivity() {
+class BootRestoreTrampolineActivity : ComponentActivity() {
 
     @Inject lateinit var controller: BoostController
     @Inject lateinit var preferences: BoostPreferences
