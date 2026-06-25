@@ -1,6 +1,6 @@
 # Spike Sign-Off Template
 
-Release gate: spike validation on file before Play promotion (v1.0.0-alpha onward).
+Release gate: spike validation on file before Play promotion (v0.x alpha onward).
 
 ## Metadata
 
@@ -9,7 +9,7 @@ Release gate: spike validation on file before Play promotion (v1.0.0-alpha onwar
 | **Sign-off date** | YYYY-MM-DD |
 | **Signer** | Name / role |
 | **Device** | e.g. Pixel 8, API 36 |
-| **DeciBoost build** | e.g. `1.0.0-alpha` (commit SHA) |
+| **DeciBoost build** | e.g. `0.1.0` (commit SHA) |
 | **YouTube version** | e.g. `com.google.android.youtube` version code |
 
 ## Checklist (from `docs/spike-youtube-checklist.md`)

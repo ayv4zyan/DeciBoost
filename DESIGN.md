@@ -4,7 +4,7 @@
 |-------|-------|
 | **Author** | Artur Ayvazyan ([@ayv4zyan](https://github.com/ayv4zyan)) |
 | **Date** | 2026-06-25 |
-| **Status** | Implemented / Current (v1.0.0-alpha — PRs 1–11 complete) |
+| **Status** | Implemented / Current (v0.1.0 alpha — PRs 1–11 complete) |
 | **Target platform** | Android 16 (API 36) primary; backward compatible to API 26 |
 
 ---
@@ -1065,7 +1065,7 @@ on:
 
 ## Implementation History (PRs 1–11)
 
-All planned PRs are **implemented** as of v1.0.0-alpha. The sections below document the original delivery sequence for reference.
+All planned PRs are **implemented** as of v0.1.0. The sections below document the original delivery sequence for reference.
 
 ### PR 1: Project scaffold & CI skeleton
 - **Files:** Root Gradle, modules, `DeciBoostApplication.kt`, `ci.yml` (unit job only)

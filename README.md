@@ -66,7 +66,7 @@ This fixes the common failure mode where boost *looks* enabled in software but d
 
 ## Screenshots
 
-_App store screenshots are pending for v1.0.0-alpha._
+_App store screenshots are pending for v0.1.0 (alpha)._
 
 ---
 
@@ -103,6 +103,8 @@ Debug package: `com.deciboost.app.debug`
 ---
 
 ## Development
+
+Agent and contributor conventions (versioning, scope): [`AGENTS.md`](AGENTS.md).
 
 ### Tech stack
 

@@ -31,4 +31,4 @@ packaging {
 
 ## CI recommendation
 
-When the first `.so` is introduced, add a release-build check (e.g. `readelf -l` or Play pre-launch report). v1.0.0-alpha has no native libs; `./gradlew assembleRelease` is sufficient for current releases.
+When the first `.so` is introduced, add a release-build check (e.g. `readelf -l` or Play pre-launch report). v0.1.0 has no native libs; `./gradlew assembleRelease` is sufficient for current alpha builds.

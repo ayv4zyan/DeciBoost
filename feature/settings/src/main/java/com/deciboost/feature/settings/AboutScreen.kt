@@ -81,7 +81,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 "Session-lifecycle-aware media volume boost for Android.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            // v1.0.0-alpha: opens in-repo policy on GitHub; see docs/PRIVACY.md for backup/UX notes.
+            // Alpha: opens in-repo policy on GitHub; see docs/PRIVACY.md for backup/UX notes.
             TextButton(
                 onClick = {
                     val intent = Intent(
