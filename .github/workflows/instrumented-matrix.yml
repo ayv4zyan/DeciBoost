@@ -26,10 +26,10 @@ jobs:
         with:
           api-level: ${{ matrix.api-level }}
           target: google_apis
-          arch: x86_64
+          arch: arm64-v8a
           ram-size: 4096
           disable-animations: true
-          boot-timeout: 600
+          emulator-boot-timeout: 600
           emulator-options: -no-snapshot-save -no-boot-anim -gpu swiftshader_indirect
           script: |
             set -euo pipefail
