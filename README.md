@@ -104,7 +104,7 @@ Debug package: `com.deciboost.app.debug`
 
 ## Development
 
-Agent and contributor conventions (versioning, scope): [`AGENTS.md`](AGENTS.md). A `versionName` bump on `main` triggers a tagged GitHub Release via [`release.yml`](.github/workflows/release.yml).
+Agent and contributor conventions (versioning, scope): [`AGENTS.md`](AGENTS.md). A `versionName` bump on `main` triggers a tagged GitHub Release with a signed APK via [`release.yml`](.github/workflows/release.yml). Latest build: [Releases](https://github.com/ayv4zyan/DeciBoost/releases).
 
 ### Tech stack
 
