@@ -27,7 +27,32 @@ versionName = "x.y.z"
 
 `AboutScreen` reads `versionName` from the package manager — no duplicate string elsewhere.
 
-When bumping, also update dated references if present: `docs/PRIVACY.md` header, `DESIGN.md` status line, spike sign-off examples.
+### Doc sync on version bump (required)
+
+Whenever you change `versionName` or `versionCode` in `app/build.gradle.kts`, **sync stale version references in the same commit** — do not leave docs behind.
+
+**Always update** (current-state references → new `versionName`):
+
+| File | What to sync |
+|------|----------------|
+| `AGENTS.md` | `### Current version` block |
+| `DESIGN.md` | Status table row (`v{x.y.z} alpha`) and any “implemented / current as of v…” lines |
+| `docs/PRIVACY.md` | `**Version:**` header; “In v{x.y.z} (alpha)” app-policy note |
+| `docs/spike-signoff.md` | Example `DeciBoost build` field |
+| `docs/16kb-page-size.md` | “v{x.y.z} has no native libs” (or equivalent current-build note) |
+| `README.md` | Version-pinned **current** status (e.g. screenshots pending line) |
+
+**Do not change** illustrative SemVer examples (e.g. `0.1.0` → `0.1.1` in bump tables), `versionCode` formula examples, git history, or historical delivery notes that intentionally refer to an older milestone.
+
+**How to find stragglers** after editing the table above:
+
+```bash
+rg '0\.1\.[0-9]+|v0\.1\.[0-9]+' --glob '*.md' --glob '!AGENTS.md'
+```
+
+Replace any hit that describes **today’s** build, not an example or historical fact. If a new doc pins the app version, add it to the table in this section.
+
+`docs/PRIVACY.md` **Effective date** changes only when policy content changes — not on every version bump.
 
 ### When to bump (default — no need to ask the user)
 
@@ -58,13 +83,15 @@ When bumping, also update dated references if present: `docs/PRIVACY.md` header,
   - `1.2.3` → `10_203`
 - If the formula would decrease `versionCode`, use `previousVersionCode + 1` instead.
 
-### Git tags (optional)
+### GitHub releases
 
-Tag releases as `v{versionName}` (e.g. `v0.1.0`, `v1.0.0`) when cutting a milestone or Play upload.
+Pushing to `main` with a `versionName` change in `app/build.gradle.kts` triggers `.github/workflows/release.yml`, which creates tag `v{versionName}` and a GitHub Release with auto-generated notes (e.g. `v0.1.3`). Do **not** create the tag manually unless re-cutting a failed release.
+
+`workflow_dispatch` on the same workflow re-checks the current `versionName` and creates the release if the tag is still missing (useful for backfill).
 
 ### Current version
 
-**`0.1.0`** (`versionCode` **100**) — initial alpha (full v1 feature set implemented).
+**`0.1.3`** (`versionCode` **103**).
 
 ## Build & verify
 
@@ -76,7 +103,7 @@ Instrumented tests (emulator): `./gradlew :testing:audio-harness:connectedDebugA
 
 ## Scope notes
 
-- **CI:** GitHub-hosted emulators only (`ci.yml`, `instrumented-matrix.yml`). No self-hosted device runners.
+- **CI:** GitHub-hosted emulators only (`ci.yml`, `instrumented-matrix.yml`, `release.yml`). No self-hosted device runners.
 - **YouTube validation:** Manual spike checklist (`docs/spike-youtube-checklist.md`) before Play promotion — not automated.
 - **License:** Apache 2.0. **Privacy:** `docs/PRIVACY.md`.
 

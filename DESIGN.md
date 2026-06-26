@@ -4,7 +4,7 @@
 |-------|-------|
 | **Author** | Artur Ayvazyan ([@ayv4zyan](https://github.com/ayv4zyan)) |
 | **Date** | 2026-06-25 |
-| **Status** | Implemented / Current (v0.1.0 alpha — PRs 1–11 complete) |
+| **Status** | Implemented / Current (v0.1.3 alpha — PRs 1–11 complete) |
 | **Target platform** | Android 16 (API 36) primary; backward compatible to API 26 |
 
 ---
@@ -199,7 +199,8 @@ DeciBoost/
 ├── gradle/libs.versions.toml
 └── .github/workflows/
     ├── ci.yml                    # PR: unit + detekt + API 36 instrumented
-    └── instrumented-matrix.yml   # Weekly: API 26, 34, 36
+    ├── instrumented-matrix.yml   # Weekly: API 26, 34, 36
+    └── release.yml               # main: GitHub Release on versionName bump
 ```
 
 ### Language & UI stack (confirmed)
@@ -776,7 +777,8 @@ interface BoostEngineProbe {
 | Backgrounded FGS under YouTube | Partial (instrumented Home) | ✅ |
 
 **Merge gate (PR CI):** harness + RMS — proves engine correctness on emulators.  
-**Release gate:** green `instrumented-matrix` (AC-4) within **7 days** of promotion, plus completed spike sign-off (`docs/spike-signoff.md`) on a physical device.
+**GitHub Release:** `release.yml` tags `v{versionName}` and publishes a GitHub Release when `versionName` changes on `main` (see `AGENTS.md`).  
+**Play promotion gate:** green `instrumented-matrix` (AC-4) within **7 days** of promotion, plus completed spike sign-off (`docs/spike-signoff.md`) on a physical device.
 
 ---
 
@@ -927,6 +929,7 @@ jobs:
 | `instrumented-api36` | Every PR | 36 | ✅ |
 | `instrumented-matrix` | Weekly + `release/*` + pre-release | 26, 34, 36 | ✅ for AC-4 |
 | `lint-detekt` | Every PR | N/A | ✅ |
+| `release` | `main` push when `versionName` changes in `app/build.gradle.kts` | N/A | — (creates `v{versionName}` tag + GitHub Release) |
 
 **AC-4 release policy:** No promotion to **internal**, **closed**, or **production** tracks unless `instrumented-matrix` (API 26 + 34 + 36) is green **within the last 7 days**, or the branch is `release/*` and the matrix run triggered by that branch is green. Weekly schedule alone is insufficient if a Tuesday PR merges and Friday build promotes without a fresh matrix.
 
@@ -974,7 +977,8 @@ on:
 - **Gradle**: AGP 8.7+, Kotlin 2.0+, KSP for Hilt
 - **Emulator**: `reactivecircus/android-emulator-runner@v2`, `ram-size: 4096`, `-no-snapshot-save`
 - **Flaky retries**: `--rerun-tasks` + instrumentation retry 2 on matrix jobs
-- **Release gate**: internal/closed/production promotion requires (1) green `instrumented-matrix` within 7 days, (2) completed spike sign-off on a physical device (`docs/spike-signoff.md`)
+- **GitHub Release**: `release.yml` on `main` when `versionName` bumps in `app/build.gradle.kts` (tag `v{versionName}` + auto-generated notes)
+- **Play promotion gate**: internal/closed/production promotion requires (1) green `instrumented-matrix` within 7 days, (2) completed spike sign-off on a physical device (`docs/spike-signoff.md`)
 
 ---
 
@@ -1065,7 +1069,7 @@ on:
 
 ## Implementation History (PRs 1–11)
 
-All planned PRs are **implemented** as of v0.1.0. The sections below document the original delivery sequence for reference.
+All planned PRs are **implemented** as of v0.1.3. The sections below document the original delivery sequence for reference.
 
 ### PR 1: Project scaffold & CI skeleton
 - **Files:** Root Gradle, modules, `DeciBoostApplication.kt`, `ci.yml` (unit job only)

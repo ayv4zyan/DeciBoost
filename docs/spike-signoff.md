@@ -9,7 +9,7 @@ Release gate: spike validation on file before Play promotion (v0.x alpha onward)
 | **Sign-off date** | YYYY-MM-DD |
 | **Signer** | Name / role |
 | **Device** | e.g. Pixel 8, API 36 |
-| **DeciBoost build** | e.g. `0.1.0` (commit SHA) |
+| **DeciBoost build** | e.g. `0.1.3` (commit SHA) |
 | **YouTube version** | e.g. `com.google.android.youtube` version code |
 
 ## Checklist (from `docs/spike-youtube-checklist.md`)
@@ -43,4 +43,5 @@ _Optional: OEM quirks, network conditions, or follow-up actions._
 |------|------|-------|
 | Emulator harness | Every push to `main` | `.github/workflows/ci.yml` (`instrumented-api36`) |
 | API matrix | Weekly + `release/*` | `.github/workflows/instrumented-matrix.yml` |
+| GitHub Release | `main` push when `versionName` changes | `.github/workflows/release.yml` |
 | Spike sign-off | Before Play promotion (manual) | This document |
