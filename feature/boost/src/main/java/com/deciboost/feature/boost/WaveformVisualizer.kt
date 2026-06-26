@@ -21,13 +21,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.deciboost.core.audio.policy.SessionEffectRegistry
+import com.deciboost.feature.boost.ui.theme.BrandCyan
 import kotlin.math.abs
 
 private const val WAVEFORM_BYTE_MASK = 0xFF
 private const val WAVEFORM_NORMALIZE_DIVISOR = 128f
 private const val WAVEFORM_MIN_BAR_HEIGHT = 2f
 private const val WAVEFORM_BAR_STROKE_WIDTH = 3f
-private val WAVEFORM_BAR_COLOR: Color = Color(0xFF18FFFF)
+private val WAVEFORM_BAR_COLOR: Color = BrandCyan
 
 @Composable
 fun WaveformVisualizer(

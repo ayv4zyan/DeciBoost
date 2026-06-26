@@ -66,6 +66,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deciboost.core.audio.policy.PlaybackPhase
+import com.deciboost.feature.boost.ui.theme.BrandBlue
+import com.deciboost.feature.boost.ui.theme.BrandCyanBright
+import com.deciboost.feature.boost.ui.theme.BrandViolet
+import com.deciboost.feature.boost.ui.theme.GaugeTrack
 import com.deciboost.feature.settings.SettingsSummaryPanel
 import com.deciboost.feature.settings.SettingsSummaryState
 import kotlin.math.cos
@@ -340,10 +344,10 @@ private fun BoostContent(
     }
 }
 
-private val GAUGE_TRACK_COLOR = androidx.compose.ui.graphics.Color(0xFF2A2F3A)
-private val GAUGE_GRADIENT_START = androidx.compose.ui.graphics.Color(0xFF7C4DFF)
-private val GAUGE_GRADIENT_MID = androidx.compose.ui.graphics.Color(0xFF18FFFF)
-private val GAUGE_GRADIENT_END = androidx.compose.ui.graphics.Color(0xFFFF6E40)
+private val GAUGE_TRACK_COLOR = GaugeTrack
+private val GAUGE_GRADIENT_START = BrandViolet
+private val GAUGE_GRADIENT_MID = BrandBlue
+private val GAUGE_GRADIENT_END = BrandCyanBright
 private const val GAUGE_ARC_START_ANGLE = 135f
 private const val GAUGE_ARC_SWEEP_MAX = 270f
 
