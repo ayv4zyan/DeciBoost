@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,9 +8,26 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+val githubReleaseKeystoreProperties =
+    rootProject.file("signing/github-release.properties").takeIf { it.exists() }
+
 android {
     namespace = "com.deciboost.app"
     compileSdk = 36
+
+    signingConfigs {
+        if (githubReleaseKeystoreProperties != null) {
+            create("githubRelease") {
+                val props = Properties().apply {
+                    githubReleaseKeystoreProperties.inputStream().use { load(it) }
+                }
+                storeFile = rootProject.file(props.getProperty("storeFile"))
+                storePassword = props.getProperty("storePassword")
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.deciboost.app"
@@ -31,6 +50,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfigs.findByName("githubRelease")?.let { signingConfig = it }
         }
     }
 
