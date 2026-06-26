@@ -35,12 +35,15 @@ jobs:
           echo "current=$current" >> "$GITHUB_OUTPUT"
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
 
-          if [ "$current" = "$previous" ]; then
-            echo "bumped=false" >> "$GITHUB_OUTPUT"
-            echo "versionName unchanged ($current); skipping release."
-          elif git rev-parse "v$current" >/dev/null 2>&1; then
+          if git rev-parse "v$current" >/dev/null 2>&1; then
             echo "bumped=false" >> "$GITHUB_OUTPUT"
             echo "Tag v$current already exists; skipping release."
+          elif [ "$current" = "$previous" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+            echo "versionName unchanged ($current); skipping release."
+          elif [ "$current" = "$previous" ]; then
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+            echo "workflow_dispatch backfill for missing tag v$current"
           else
             echo "bumped=true" >> "$GITHUB_OUTPUT"
             echo "versionName bumped: $previous -> $current"
