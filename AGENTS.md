@@ -93,7 +93,7 @@ APKs are signed with the committed CI keystore in `signing/github-release.keysto
 
 ### Current version
 
-**`0.1.3`** (`versionCode` **103**).
+**`0.1.4`** (`versionCode` **104**).
 
 ## Build & verify
 

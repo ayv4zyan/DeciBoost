@@ -1,5 +1,7 @@
 package com.deciboost.app.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -29,24 +31,36 @@ object Routes {
 fun DeciBoostNavHost() {
     val navController = rememberNavController()
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
-    val onboardingComplete by onboardingViewModel.onboardingComplete.collectAsStateWithLifecycle()
+    val onboardingStatus by onboardingViewModel.onboardingStatus.collectAsStateWithLifecycle()
 
-    val startDestination = if (onboardingComplete) Routes.BOOST else Routes.ONBOARDING
+    if (!onboardingStatus.isLoaded) {
+        return
+    }
+
+    val startDestination = if (onboardingStatus.isComplete) Routes.BOOST else Routes.ONBOARDING
 
     NavHost(
         navController = navController,
         startDestination = startDestination,
         enterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { fullWidth -> fullWidth },
-                animationSpec = tween(NAV_MOTION_DURATION_MS),
-            )
+            if (initialState.destination.id == targetState.destination.id) {
+                EnterTransition.None
+            } else {
+                slideInHorizontally(
+                    initialOffsetX = { fullWidth -> fullWidth },
+                    animationSpec = tween(NAV_MOTION_DURATION_MS),
+                )
+            }
         },
         exitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { fullWidth -> -fullWidth },
-                animationSpec = tween(NAV_MOTION_DURATION_MS),
-            )
+            if (initialState.destination.id == targetState.destination.id) {
+                ExitTransition.None
+            } else {
+                slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> -fullWidth },
+                    animationSpec = tween(NAV_MOTION_DURATION_MS),
+                )
+            }
         },
         popEnterTransition = {
             slideInHorizontally(

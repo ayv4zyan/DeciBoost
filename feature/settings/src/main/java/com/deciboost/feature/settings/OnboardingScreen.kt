@@ -51,10 +51,10 @@ fun OnboardingScreen(
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
-    val onboardingComplete by viewModel.onboardingComplete.collectAsStateWithLifecycle()
+    val onboardingStatus by viewModel.onboardingStatus.collectAsStateWithLifecycle()
 
-    LaunchedEffect(onboardingComplete) {
-        if (onboardingComplete) {
+    LaunchedEffect(onboardingStatus) {
+        if (onboardingStatus.isLoaded && onboardingStatus.isComplete) {
             onComplete()
         }
     }

@@ -1,7 +1,7 @@
 # DeciBoost Privacy Policy
 
 **Effective date:** 2026-06-25  
-**Version:** 0.1.3
+**Version:** 0.1.4
 
 ## Summary
 
@@ -24,7 +24,7 @@ The app manifest sets `android:allowBackup="true"`, which lets Android's **optio
 
 ## Viewing this policy in the app
 
-In v0.1.3 (alpha), **About → Privacy policy** opens this document on GitHub (`main` branch). A hosted or in-app policy page may replace this link before the `1.0.0` stable release.
+In v0.1.4 (alpha), **About → Privacy policy** opens this document on GitHub (`main` branch). A hosted or in-app policy page may replace this link before the `1.0.0` stable release.
 
 ## Permissions
 
