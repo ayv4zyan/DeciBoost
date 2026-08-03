@@ -1,22 +1,29 @@
 package com.deciboost.app.service
 
+import android.content.Context
+import android.content.Intent
+import com.deciboost.core.audio.android.BoostEngineImpl
 import com.deciboost.core.domain.BoostServiceCoordinator
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
 
-/**
- * Stops the boost FGS through [BoostServiceClient] so any [android.content.ServiceConnection]
- * is released. A bare [android.content.Context.stopService] leaves a bound service alive
- * (common after [BoostServiceClient.ensureRunning]), which breaks kill-switch and tests.
- *
- * [Provider] breaks the Hilt cycle: Controller → Coordinator → Client → Controller.
- */
 @Singleton
 class BoostServiceCoordinatorImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val engine: BoostEngineImpl,
+    /**
+     * Lazy to avoid a Hilt cycle:
+     * Controller → Coordinator → Client → Controller.
+     */
     private val serviceClient: Provider<BoostServiceClient>,
 ) : BoostServiceCoordinator {
     override suspend fun stopForegroundService() {
-        serviceClient.get().stopService()
+        // BIND_AUTO_CREATE from [BoostServiceClient.ensureRunning] keeps the service alive after
+        // bare stopService — always release the bind first (kill switch / idle shutdown path).
+        serviceClient.get().releaseBinding()
+        engine.stop()
+        context.stopService(Intent(context, BoostForegroundService::class.java))
     }
 }

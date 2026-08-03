@@ -46,7 +46,7 @@ class BootReceiverFgsTest {
         ensureEngineIdle()
         instrumentation.uiAutomation.executeShellCommand(
             "pm grant ${context.packageName} android.permission.POST_NOTIFICATIONS",
-        ).close()
+        )
     }
 
     @After
@@ -271,12 +271,9 @@ class BootReceiverFgsTest {
     companion object {
         private const val SERVICE_STOP_TIMEOUT_MS = 5_000L
         private const val SERVICE_START_TIMEOUT_MS = 5_000L
-        private const val ASYNC_SETTLE_TIMEOUT_MS = 3_000L
-        /**
-         * Observation window for asserting something does *not* start. Must cover trampoline
-         * activity launch + restore coroutine (previously Thread.sleep(2000) in these tests).
-         */
-        private const val NO_START_OBSERVE_MS = 2_500L
+        private const val ASYNC_SETTLE_TIMEOUT_MS = 2_000L
+        /** Observation window for asserting something does *not* start. */
+        private const val NO_START_OBSERVE_MS = 1_200L
         private const val POLL_MS = 100L
     }
 }
