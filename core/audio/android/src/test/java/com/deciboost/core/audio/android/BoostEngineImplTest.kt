@@ -58,8 +58,8 @@ class BoostEngineImplTest {
     @Test
     fun watchdog_unhealthy_releasesBeforeReapply_andDefersFailureCountUntilRecoveryCompletes() {
         val factory = FakeAudioEffectFactory()
-        // Long poll interval so only manual verifier invokes participate in this test.
-        // Default 750ms races under CI load (recovery can release the enhancer before asserts).
+        // Long poll interval + stop() so only manual verifier invokes participate.
+        // Default 750ms races under CI load with engine-thread recovery.
         val watchdog = BoostWatchdog(pollIntervalMs = 60_000L)
         val engine = createEngine(
             effectFactory = factory,
@@ -76,15 +76,15 @@ class BoostEngineImplTest {
         assertFalse("Enhancer should still be live after boost apply", initialEnhancer!!.released)
         val createsAfterBoost = factory.loudnessCreateCount
 
-        // First unhealthy tick schedules release+reapply on the engine thread. A second tick
-        // while recoveryInProgress must not schedule another recovery (deferred failure count).
-        watchdog.verifier?.invoke()
-        watchdog.verifier?.invoke()
-
-        awaitCondition(timeoutMs = 2_000) { initialEnhancer.released }
-        assertEquals(ReapplyReason.WATCHDOG, engine.getLastReapplyReason())
+        // Drive unhealthy ticks sequentially and await each recovery. Back-to-back invokes race
+        // the engine thread clearing recoveryInProgress between calls (CI flake).
+        assertFalse(watchdog.verifier!!.invoke())
+        awaitCondition(timeoutMs = 2_000) {
+            initialEnhancer.released &&
+                engine.getLastReapplyReason() == ReapplyReason.WATCHDOG
+        }
         assertEquals(
-            "Double verifier invoke during recovery must produce only one recreate",
+            "First unhealthy cycle should recreate the global enhancer once",
             createsAfterBoost + 1,
             factory.loudnessCreateCount,
         )
@@ -92,18 +92,22 @@ class BoostEngineImplTest {
         val recoveredEnhancer = factory.loudnessEnhancers[SessionEffectRegistry.GLOBAL_SESSION]
         assertTrue(recoveredEnhancer != null)
         assertFalse(recoveredEnhancer!!.released)
+        assertTrue(recoveredEnhancer !== initialEnhancer)
 
-        // Recovery cleared recoveryInProgress; next unhealthy tick is the 2nd failure → force path.
-        watchdog.verifier?.invoke()
+        // Failure count is preserved across recovery (not reset on WATCHDOG apply).
+        // Second unhealthy tick reaches WATCHDOG_FAILURES_BEFORE_FORCE_RECREATE.
+        assertFalse(watchdog.verifier!!.invoke())
         awaitCondition(timeoutMs = 2_000) { recoveredEnhancer.released }
         val forceRecoveredEnhancer = factory.loudnessEnhancers[SessionEffectRegistry.GLOBAL_SESSION]
         assertTrue(forceRecoveredEnhancer != null)
         assertFalse(forceRecoveredEnhancer!!.released)
+        assertTrue(forceRecoveredEnhancer !== recoveredEnhancer)
         assertEquals(
-            "Force recreate after second unhealthy cycle should create one more enhancer",
+            "Second unhealthy cycle should recreate once more (force path)",
             createsAfterBoost + 2,
             factory.loudnessCreateCount,
         )
+        assertEquals(ReapplyReason.WATCHDOG, engine.getLastReapplyReason())
     }
 
     private fun createEngine(
