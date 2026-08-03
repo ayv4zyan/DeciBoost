@@ -32,6 +32,8 @@ class BoostServiceClientImpl @Inject constructor(
     private val preferences: BoostPreferences,
 ) : BoostServiceClient, BoostEngineService {
 
+    /** True after [bindService] until a matching [unbindService] (even if not yet connected). */
+    private var bindRequested = false
     private var bound = false
 
     private val connection = object : ServiceConnection {
@@ -60,8 +62,10 @@ class BoostServiceClientImpl @Inject constructor(
         engine.setEffectiveMaxGainCap(preferences.effectiveMaxGainMb.first())
         val intent = Intent(context, BoostForegroundService::class.java)
         context.startForegroundService(intent)
-        if (!bound) {
-            context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        // Track bindRequested (not only [bound]) so a second call before onServiceConnected
+        // does not issue a duplicate bind, and so releaseBinding can unbind a pending bind.
+        if (!bindRequested) {
+            bindRequested = context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
         }
     }
 
@@ -72,13 +76,16 @@ class BoostServiceClientImpl @Inject constructor(
     }
 
     override fun releaseBinding() {
-        if (bound) {
-            try {
-                context.unbindService(connection)
-            } catch (_: IllegalArgumentException) {
-                // Already unbound
-            }
+        if (!bindRequested) {
             bound = false
+            return
         }
+        try {
+            context.unbindService(connection)
+        } catch (_: IllegalArgumentException) {
+            // Already unbound or connection never established
+        }
+        bindRequested = false
+        bound = false
     }
 }
