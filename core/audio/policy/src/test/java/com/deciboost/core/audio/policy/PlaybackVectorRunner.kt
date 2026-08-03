@@ -32,6 +32,9 @@ object PlaybackVectorRunner {
                 ?: ConfigSnapshot(count = count, usageHash = count + index)
             activeConfigs = listOf(config)
             tracker.onConfigChanged(config)
+            // Flush config debounce so opaque/same-hash callbacks actually reapply.
+            now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+            tracker.onTick()
             tracker.onMusicActiveChanged(active)
             if (!active) {
                 now += PlaybackActivityTracker.PAUSE_HOLD_MS + 10
@@ -41,6 +44,9 @@ object PlaybackVectorRunner {
                 now += 50
                 tracker.onTick()
                 tracker.markReapplySuccess()
+                // Drain settle reapply scheduled on resume.
+                now += PlaybackActivityTracker.SETTLE_REAPPLY_MS
+                tracker.onTick()
             }
             now += 50
             tracker.onTick()

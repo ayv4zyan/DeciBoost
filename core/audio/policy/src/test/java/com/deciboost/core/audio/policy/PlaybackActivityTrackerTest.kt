@@ -189,6 +189,12 @@ class PlaybackActivityTrackerTest {
     }
 
     @Test
+    fun `arcplayer_opaque_swap vector from JSON`() {
+        val vector = PlaybackVectorLoader.loadVectors("arcplayer_opaque_swap").single()
+        PlaybackVectorRunner.assertVector(vector)
+    }
+
+    @Test
     fun `trailing-edge debounce delivers latest snapshot after burst`() {
         tracker.onMusicActiveChanged(true)
         reapplyCount = 0
@@ -244,7 +250,7 @@ class PlaybackActivityTrackerTest {
     }
 
     @Test
-    fun `config reapply suppressed when phase is not active`() {
+    fun `config change while Paused with active configs begins recovering and reapplies`() {
         tracker.onMusicActiveChanged(true)
         reapplyCount = 0
         tracker.onMusicActiveChanged(false)
@@ -255,7 +261,121 @@ class PlaybackActivityTrackerTest {
         tracker.onConfigChanged(ConfigSnapshot(2, 5))
         now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
         tracker.onTick()
-        assertEquals(0, reapplyCount)
+        assertEquals(PlaybackPhase.Recovering, tracker.phase.value)
+        assertTrue(reapplyCount >= 1)
+    }
+
+    /**
+     * ArcPlayer-like: pause long enough to enter Paused, then a new video raises
+     * configs *before* isMusicActive flips true.
+     */
+    @Test
+    fun `arcplayer config change while Paused reapplies and recovers`() {
+        tracker.onMusicActiveChanged(true)
+        tracker.onConfigChanged(ConfigSnapshot(1, 100))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+
+        tracker.onMusicActiveChanged(false)
+        now += PlaybackActivityTracker.PAUSE_HOLD_MS + 10
+        tracker.onTick()
+        assertEquals(PlaybackPhase.Paused, tracker.phase.value)
+
+        reapplyCount = 0
+        // New video starts: config appears before music-active poll sees true
+        tracker.onConfigChanged(ConfigSnapshot(1, 200))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+
+        assertEquals(PlaybackPhase.Recovering, tracker.phase.value)
+        assertTrue(reapplyCount >= 1)
+    }
+
+    /**
+     * ArcPlayer-like: track recreation with same anonymized fingerprint.
+     * Platform still fires onPlaybackConfigChanged; we must reapply even when
+     * count+usageHash are unchanged so session-0 LE reattaches after AudioTrack swap.
+     */
+    @Test
+    fun `arcplayer same count same usageHash track swap reapplies`() {
+        tracker.onMusicActiveChanged(true)
+        tracker.onConfigChanged(ConfigSnapshot(1, 100))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+
+        reapplyCount = 0
+        tracker.onConfigChanged(ConfigSnapshot(1, 100))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+
+        assertEquals(1, reapplyCount)
+        assertEquals(PlaybackPhase.Active, tracker.phase.value)
+    }
+
+    /**
+     * Config churn during Recovering must reapply; settle timer covers the
+     * race where the first reapply lands before the new AudioTrack exists.
+     */
+    @Test
+    fun `arcplayer config churn during Recovering reapplies and settle fires`() {
+        tracker.onMusicActiveChanged(true)
+        tracker.onConfigChanged(ConfigSnapshot(1, 100))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+
+        tracker.onMusicActiveChanged(false)
+        now += PlaybackActivityTracker.PAUSE_HOLD_MS + 10
+        tracker.onTick()
+        assertEquals(PlaybackPhase.Paused, tracker.phase.value)
+
+        reapplyCount = 0
+        tracker.onMusicActiveChanged(true)
+        assertEquals(PlaybackPhase.Recovering, tracker.phase.value)
+        assertEquals(1, reapplyCount)
+
+        // New video track appears while still Recovering
+        tracker.onConfigChanged(ConfigSnapshot(0, 0, hasMediaUsage = false))
+        now += 40
+        tracker.onTick()
+        tracker.onConfigChanged(ConfigSnapshot(1, 100))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+        assertTrue("expected config reapply during Recovering", reapplyCount >= 2)
+
+        tracker.markReapplySuccess()
+        assertEquals(PlaybackPhase.Active, tracker.phase.value)
+
+        val beforeSettle = reapplyCount
+        now += PlaybackActivityTracker.SETTLE_REAPPLY_MS
+        tracker.onTick()
+        assertTrue("expected settle reapply after resume", reapplyCount > beforeSettle)
+    }
+
+    @Test
+    fun `pause resume triggers settle reapply after delay`() {
+        tracker.onMusicActiveChanged(true)
+        tracker.onConfigChanged(ConfigSnapshot(1, 1))
+        now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+
+        tracker.onMusicActiveChanged(false)
+        now += PlaybackActivityTracker.PAUSE_HOLD_MS + 10
+        tracker.onTick()
+        assertEquals(PlaybackPhase.Paused, tracker.phase.value)
+
+        reapplyCount = 0
+        tracker.onMusicActiveChanged(true)
+        assertEquals(1, reapplyCount)
+        tracker.markReapplySuccess()
+        assertEquals(PlaybackPhase.Active, tracker.phase.value)
+
+        now += PlaybackActivityTracker.SETTLE_REAPPLY_MS - 50
+        tracker.onTick()
+        assertEquals(1, reapplyCount)
+
+        now += 50
+        tracker.onTick()
+        assertEquals(2, reapplyCount)
     }
 
     @Test
@@ -263,6 +383,10 @@ class PlaybackActivityTrackerTest {
         tracker.onMusicActiveChanged(true)
         tracker.onConfigChanged(ConfigSnapshot(1, 1))
         now += PlaybackActivityTracker.CONFIG_DEBOUNCE_MS
+        tracker.onTick()
+
+        // Drain post-resume settle reapply so it doesn't stack with the periodic one.
+        now += PlaybackActivityTracker.SETTLE_REAPPLY_MS
         tracker.onTick()
 
         val reappliesBeforePeriodic = reapplyCount
@@ -310,6 +434,7 @@ class PlaybackActivityTrackerTest {
             "bluetooth_route",
             "idle_no_boost",
             "notification_dominant",
+            "arcplayer_opaque_swap",
         ).forEach { id ->
             assertTrue(content.contains(id))
         }

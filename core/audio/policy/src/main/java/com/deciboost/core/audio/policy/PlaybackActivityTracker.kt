@@ -27,6 +27,8 @@ class PlaybackActivityTracker(
     private var pendingConfigDeadlineMs: Long? = null
     private var activePhaseEnteredAtMs: Long? = null
     private var lastPeriodicRecreateAtMs: Long? = null
+    private var settleReapplyAtMs: Long? = null
+    private var lastOpaqueConfigReapplyAtMs: Long? = null
 
     fun setBoostPercent(percent: Int) {
         currentBoostPercent = percent
@@ -48,9 +50,11 @@ class PlaybackActivityTracker(
         lastMusicActive = isMusicActive
         if (!isMusicActive) {
             lastMusicInactiveAtMs = nowMs()
-            schedulePausedIfStable()
+            settleReapplyAtMs = null
+            // Actual pause transition handled in onTick after PAUSE_HOLD_MS
         } else {
-            lastMusicInactiveAtMs = null
+            // Keep lastMusicInactiveAtMs for RECENT_INACTIVE_WINDOW so opaque
+            // same-fingerprint config events after pause still reapply.
             handleMusicBecameActive()
         }
     }
@@ -58,11 +62,21 @@ class PlaybackActivityTracker(
     fun onConfigChanged(snapshot: ConfigSnapshot) {
         val configDiff = diff(lastConfig, snapshot)
         if (configDiff.kind == ConfigDiffKind.NONE) {
-            if (pendingConfig == null || snapshot == pendingConfig) {
-                pendingConfig = null
-                pendingConfigDeadlineMs = null
+            val pending = pendingConfig
+            // Don't clobber a pending real change with a stale lastConfig echo.
+            if (pending != null &&
+                pending != snapshot &&
+                diff(lastConfig, pending).kind != ConfigDiffKind.NONE
+            ) {
+                return
             }
-            return
+            if (!shouldProcessOpaqueConfig()) {
+                if (pending == null || snapshot == pending) {
+                    pendingConfig = null
+                    pendingConfigDeadlineMs = null
+                }
+                return
+            }
         }
 
         pendingConfig = snapshot
@@ -79,7 +93,8 @@ class PlaybackActivityTracker(
 
     fun onTick() {
         val now = nowMs()
-        processPendingConfigIfDue(now)
+        pendingConfigApplier.applyIfDue(now)
+        maybeSettleReapply(now)
         maybePeriodicRecreate(now)
         val inactiveSince = lastMusicInactiveAtMs
         if (!lastMusicActive && inactiveSince != null) {
@@ -91,11 +106,12 @@ class PlaybackActivityTracker(
         }
 
         if (_phase.value == PlaybackPhase.Recovering) {
-            val started = recoveringStartedAtMs ?: return
-            if (now - started > RECOVERING_TIMEOUT_MS) {
+            val started = recoveringStartedAtMs
+            if (started != null && now - started > RECOVERING_TIMEOUT_MS) {
                 recoveringRetries++
                 if (recoveringRetries >= MAX_RECOVERING_RETRIES) {
                     recoveringStartedAtMs = null
+                    settleReapplyAtMs = null
                     onReleaseAndRecreate()
                     transitionTo(PlaybackPhase.Paused)
                 } else {
@@ -141,27 +157,22 @@ class PlaybackActivityTracker(
         }
     }
 
-    private fun schedulePausedIfStable() {
-        // Actual transition handled in onTick after PAUSE_HOLD_MS
-    }
-
     private fun handleMusicBecameActive() {
         when (_phase.value) {
             PlaybackPhase.Paused -> {
                 if (currentBoostPercent > 100) {
-                    transitionTo(PlaybackPhase.Recovering)
-                    recoveringStartedAtMs = nowMs()
-                    recoveringRetries = 0
-                    triggerReapply(ReapplyReason.PLAYBACK_ACTIVE)
+                    beginRecovering(ReapplyReason.PLAYBACK_ACTIVE)
                 } else {
                     transitionTo(PlaybackPhase.Active)
                 }
             }
             PlaybackPhase.Idle -> {
-                if (snapshotIndicatesActivity()) {
+                val indicatesActivity = (lastConfig?.count ?: 0) > 0 || lastMusicActive
+                if (indicatesActivity) {
                     transitionTo(PlaybackPhase.Active)
                     if (currentBoostPercent > 100) {
                         triggerReapply(ReapplyReason.PLAYBACK_ACTIVE)
+                        scheduleSettleReapply(nowMs())
                     }
                 }
             }
@@ -169,33 +180,53 @@ class PlaybackActivityTracker(
                 transitionTo(PlaybackPhase.Active)
                 if (currentBoostPercent > 100) {
                     triggerReapply(ReapplyReason.PLAYBACK_ACTIVE)
+                    scheduleSettleReapply(nowMs())
                 }
             }
         }
     }
 
-    private fun snapshotIndicatesActivity(): Boolean =
-        (lastConfig?.count ?: 0) > 0 || lastMusicActive
-
-    private fun processPendingConfigIfDue(now: Long) {
-        val deadline = pendingConfigDeadlineMs ?: return
-        if (now < deadline) return
-
-        val snapshot = pendingConfig ?: return
-        pendingConfig = null
-        pendingConfigDeadlineMs = null
-
-        val configDiff = diff(lastConfig, snapshot)
-        lastConfig = snapshot
-        lastConfigChangeAtMs = now
-        if (configDiff.kind == ConfigDiffKind.NONE) return
-
-        if (_phase.value == PlaybackPhase.Idle && snapshot.count > 0) {
-            transitionTo(PlaybackPhase.Active)
+    private fun shouldProcessOpaqueConfig(): Boolean {
+        if (currentBoostPercent <= 100) return false
+        return when (_phase.value) {
+            PlaybackPhase.Active,
+            PlaybackPhase.Recovering,
+            PlaybackPhase.Paused,
+            -> true
+            PlaybackPhase.Idle -> false
         }
+    }
 
-        if (currentBoostPercent > 100 && _phase.value == PlaybackPhase.Active) {
-            triggerReapply(ReapplyReason.PLAYBACK_CONFIG_CHANGED)
+    private fun beginRecovering(reason: ReapplyReason) {
+        transitionTo(PlaybackPhase.Recovering)
+        recoveringStartedAtMs = nowMs()
+        recoveringRetries = 0
+        triggerReapply(reason)
+        scheduleSettleReapply(nowMs())
+    }
+
+    private fun scheduleSettleReapply(now: Long) {
+        if (currentBoostPercent <= 100) return
+        val candidate = now + SETTLE_REAPPLY_MS
+        val existing = settleReapplyAtMs
+        // Keep the soonest pending settle so bursts don't push recovery out indefinitely.
+        settleReapplyAtMs = if (existing == null) candidate else minOf(existing, candidate)
+    }
+
+    private fun maybeSettleReapply(now: Long) {
+        val due = settleReapplyAtMs ?: return
+        if (now < due) return
+        settleReapplyAtMs = null
+        if (currentBoostPercent <= 100) return
+        when (_phase.value) {
+            PlaybackPhase.Active,
+            PlaybackPhase.Recovering,
+            -> {
+                if (lastMusicActive || _phase.value == PlaybackPhase.Recovering) {
+                    triggerReapply(ReapplyReason.PLAYBACK_ACTIVE)
+                }
+            }
+            else -> Unit
         }
     }
 
@@ -220,12 +251,114 @@ class PlaybackActivityTracker(
             activePhaseEnteredAtMs = null
             lastPeriodicRecreateAtMs = null
         }
+        if (phase == PlaybackPhase.Idle || phase == PlaybackPhase.Paused) {
+            if (phase == PlaybackPhase.Paused && previous == PlaybackPhase.Recovering) {
+                // Exhausted recovering — drop settle so we don't reapply while paused.
+                settleReapplyAtMs = null
+            }
+            if (phase == PlaybackPhase.Idle) {
+                settleReapplyAtMs = null
+            }
+        }
     }
 
     private fun triggerReapply(reason: ReapplyReason) {
         reapplyCount++
         onReapply(reason)
     }
+
+    /**
+     * Nested applier keeps phase-specific pending-config branches off the outer class
+     * method count and cyclomatic complexity budget.
+     */
+    private inner class PendingConfigApplier {
+        fun applyIfDue(now: Long) {
+            val deadline = pendingConfigDeadlineMs ?: return
+            if (now < deadline) return
+
+            val snapshot = pendingConfig ?: return
+            pendingConfig = null
+            pendingConfigDeadlineMs = null
+
+            val configDiff = diff(lastConfig, snapshot)
+            lastConfig = snapshot
+            lastConfigChangeAtMs = now
+
+            if (currentBoostPercent <= 100) {
+                handleBoostAtOrBelowUnity(snapshot)
+                return
+            }
+
+            when (_phase.value) {
+                PlaybackPhase.Idle -> handleIdleConfig(snapshot)
+                PlaybackPhase.Paused -> handlePausedConfig(snapshot)
+                PlaybackPhase.Recovering -> handleRecoveringConfig(snapshot, configDiff, now)
+                PlaybackPhase.Active -> handleActiveConfig(configDiff, now)
+            }
+        }
+
+        private fun handleBoostAtOrBelowUnity(snapshot: ConfigSnapshot) {
+            if (_phase.value == PlaybackPhase.Idle && snapshot.count > 0) {
+                transitionTo(PlaybackPhase.Active)
+            }
+        }
+
+        private fun handleIdleConfig(snapshot: ConfigSnapshot) {
+            if (snapshot.count > 0) {
+                transitionTo(PlaybackPhase.Active)
+                triggerReapply(ReapplyReason.PLAYBACK_CONFIG_CHANGED)
+            }
+        }
+
+        private fun handlePausedConfig(snapshot: ConfigSnapshot) {
+            // DESIGN: Paused → recover when playback configs indicate a new/resumed session.
+            if (snapshot.count > 0) {
+                beginRecovering(ReapplyReason.PLAYBACK_CONFIG_CHANGED)
+            }
+        }
+
+        private fun handleRecoveringConfig(
+            snapshot: ConfigSnapshot,
+            configDiff: ConfigDiff,
+            now: Long,
+        ) {
+            if (snapshot.count > 0 || configDiff.kind != ConfigDiffKind.NONE) {
+                triggerReapply(ReapplyReason.PLAYBACK_CONFIG_CHANGED)
+                scheduleSettleReapply(now)
+            }
+        }
+
+        private fun handleActiveConfig(configDiff: ConfigDiff, now: Long) {
+            val inactiveAt = lastMusicInactiveAtMs
+            val isRecentlyInactive =
+                inactiveAt != null && now - inactiveAt <= RECENT_INACTIVE_WINDOW_MS
+            when {
+                configDiff.kind != ConfigDiffKind.NONE -> {
+                    triggerReapply(ReapplyReason.PLAYBACK_CONFIG_CHANGED)
+                }
+                // Same anonymized fingerprint but platform still notified us — common when
+                // ArcPlayer (etc.) tears down/recreates AudioTrack with identical usage.
+                // Always reapply after recent pause; otherwise throttle opaque events.
+                isRecentlyInactive -> {
+                    triggerReapply(ReapplyReason.PLAYBACK_CONFIG_CHANGED)
+                    lastOpaqueConfigReapplyAtMs = now
+                }
+                else -> {
+                    val lastOpaque = lastOpaqueConfigReapplyAtMs
+                    if (lastOpaque == null ||
+                        now - lastOpaque >= OPAQUE_CONFIG_REAPPLY_MIN_INTERVAL_MS
+                    ) {
+                        triggerReapply(ReapplyReason.PLAYBACK_CONFIG_CHANGED)
+                        lastOpaqueConfigReapplyAtMs = now
+                    } else {
+                        scheduleSettleReapply(now)
+                    }
+                }
+            }
+        }
+    }
+
+    private val pendingConfigApplier = PendingConfigApplier()
 
     companion object {
         const val PAUSE_HOLD_MS = 200L
@@ -234,5 +367,11 @@ class PlaybackActivityTracker(
         const val RECOVERING_TIMEOUT_MS = 1500L
         const val IDLE_TIMEOUT_MS = 5 * 60 * 1000L
         const val ACTIVE_STALE_RECREATE_MS = 12 * 60 * 1000L
+        /** Second reapply after resume so effects attach after the new AudioTrack exists. */
+        const val SETTLE_REAPPLY_MS = 400L
+        /** Window after music-inactive where same-fingerprint config events force reapply. */
+        const val RECENT_INACTIVE_WINDOW_MS = 30_000L
+        /** Throttle opaque (count+hash unchanged) config reapplies when not recently paused. */
+        const val OPAQUE_CONFIG_REAPPLY_MIN_INTERVAL_MS = 500L
     }
 }

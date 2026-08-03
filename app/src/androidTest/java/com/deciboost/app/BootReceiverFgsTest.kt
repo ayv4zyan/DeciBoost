@@ -4,18 +4,20 @@ import android.app.ActivityManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import com.deciboost.app.receiver.BootCompletedReceiver
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.deciboost.app.receiver.BootCompletedReceiver
 import com.deciboost.app.service.BootRestoreActionReceiver
 import com.deciboost.app.service.BootRestoreNotifier
 import com.deciboost.app.service.BootRestoreTrampolineActivity
 import com.deciboost.app.service.BoostForegroundService
+import com.deciboost.app.service.BoostServiceClient
 import com.deciboost.core.data.BoostPreferences
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -31,18 +33,26 @@ class BootReceiverFgsTest {
     val hiltRule = HiltAndroidRule(this)
 
     @Inject lateinit var preferences: BoostPreferences
+    @Inject lateinit var serviceClient: BoostServiceClient
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
+    private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val receiver = BootCompletedReceiver()
+    private val serviceClassName = BoostForegroundService::class.java.name
 
     @Before
     fun setUp() {
         hiltRule.inject()
         ensureEngineIdle()
-        val shell = InstrumentationRegistry.getInstrumentation().uiAutomation
-        shell.executeShellCommand(
+        instrumentation.uiAutomation.executeShellCommand(
             "pm grant ${context.packageName} android.permission.POST_NOTIFICATIONS",
-        )
+        ).close()
+    }
+
+    @After
+    fun tearDown() {
+        // Mid-test failures must not leave BIND_AUTO_CREATE holding the FGS for the next test.
+        ensureEngineIdle()
     }
 
     @Test
@@ -50,8 +60,16 @@ class BootReceiverFgsTest {
         preferences.setAutoStartOnBoot(false)
         preferences.setBoostPercent(150)
         receiver.onReceive(context.applicationContext, bootCompletedIntent())
-        Thread.sleep(800)
-        assertFalse(isServiceRunning(BoostForegroundService::class.java.name))
+        // Allow goAsync IO work; FGS must never appear.
+        assertTrue(
+            "FGS must stay stopped when auto-start-on-boot is disabled",
+            waitUntil(timeoutMs = ASYNC_SETTLE_TIMEOUT_MS) { !isServiceRunning(serviceClassName) },
+        )
+        // Hold briefly so a late async start would still be observed as a failure.
+        assertFalse(
+            "FGS must not start when auto-start-on-boot is disabled",
+            waitUntilAppears(timeoutMs = NO_START_OBSERVE_MS) { isServiceRunning(serviceClassName) },
+        )
     }
 
     @Test
@@ -65,13 +83,15 @@ class BootReceiverFgsTest {
             putExtra(BootRestoreActionReceiver.EXTRA_BOOST, 150)
         }
         context.startActivity(intent)
-        Thread.sleep(2_000)
 
         assertTrue(
-            "Expected FGS running after restore",
-            isServiceRunning(BoostForegroundService::class.java.name),
+            "Expected FGS running after restore within ${SERVICE_START_TIMEOUT_MS}ms",
+            waitUntil(timeoutMs = SERVICE_START_TIMEOUT_MS) { isServiceRunning(serviceClassName) },
         )
-        val probe = BoostProbeTestClient.dump(context)
+        val probe = waitForProbe(
+            timeoutMs = SERVICE_START_TIMEOUT_MS,
+            predicate = { it.globalEffectEnabled && it.targetGainMb > 0 },
+        )
         assertTrue(
             "Expected global effect enabled after restore (gain=${probe.targetGainMb})",
             probe.globalEffectEnabled,
@@ -88,12 +108,10 @@ class BootReceiverFgsTest {
         preferences.setAutoStartOnBoot(true)
         preferences.setBoostPercent(150)
         receiver.onReceive(context.applicationContext, bootCompletedIntent())
-        Thread.sleep(800)
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val hasBootNotification = manager.activeNotifications.any {
-            it.id == BootRestoreNotifier.BOOT_NOTIFICATION_ID
-        }
-        assertFalse("Expected no boot notification before onboarding", hasBootNotification)
+        assertFalse(
+            "Expected no boot notification before onboarding",
+            waitUntilAppears(timeoutMs = ASYNC_SETTLE_TIMEOUT_MS) { hasBootRestoreNotification() },
+        )
     }
 
     @Test
@@ -107,10 +125,16 @@ class BootReceiverFgsTest {
             putExtra(BootRestoreActionReceiver.EXTRA_BOOST, 150)
         }
         context.startActivity(intent)
-        Thread.sleep(2_000)
 
-        assertFalse(isServiceRunning(BoostForegroundService::class.java.name))
-        val probe = BoostProbeTestClient.dump(context)
+        // Trampoline finishes quickly; ensure no late FGS start.
+        assertFalse(
+            "Kill switch must prevent FGS from starting after restore attempt",
+            waitUntilAppears(timeoutMs = NO_START_OBSERVE_MS) { isServiceRunning(serviceClassName) },
+        )
+        val probe = waitForProbe(
+            timeoutMs = ASYNC_SETTLE_TIMEOUT_MS,
+            predicate = { !it.globalEffectEnabled && it.targetGainMb == 0 },
+        )
         assertFalse(
             "Kill switch must block restore boost (gain=${probe.targetGainMb})",
             probe.globalEffectEnabled,
@@ -127,15 +151,20 @@ class BootReceiverFgsTest {
         preferences.setAutoStartOnBoot(true)
         preferences.setBoostPercent(150)
         receiver.onReceive(context.applicationContext, bootCompletedIntent())
-        Thread.sleep(800)
-        assertFalse(isServiceRunning(BoostForegroundService::class.java.name))
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val hasBootNotification = manager.activeNotifications.any {
-            it.id == BootRestoreNotifier.BOOT_NOTIFICATION_ID
-        }
-        assertTrue("Expected boot restore notification", hasBootNotification)
 
-        val probe = BoostProbeTestClient.dump(context)
+        assertTrue(
+            "Expected boot restore notification within ${ASYNC_SETTLE_TIMEOUT_MS}ms",
+            waitUntil(timeoutMs = ASYNC_SETTLE_TIMEOUT_MS) { hasBootRestoreNotification() },
+        )
+        assertFalse(
+            "Boot receiver must only notify — FGS must not auto-start",
+            waitUntilAppears(timeoutMs = NO_START_OBSERVE_MS) { isServiceRunning(serviceClassName) },
+        )
+
+        val probe = waitForProbe(
+            timeoutMs = ASYNC_SETTLE_TIMEOUT_MS,
+            predicate = { !it.globalEffectEnabled && it.targetGainMb == 0 },
+        )
         assertFalse(
             "Boost must not be applied before user confirms restore notification " +
                 "(gain=${probe.targetGainMb} enabled=${probe.globalEffectEnabled})",
@@ -147,15 +176,51 @@ class BootReceiverFgsTest {
         )
     }
 
+    /**
+     * Fully stop FGS before/after each test.
+     *
+     * [BoostServiceClient.ensureRunning] binds with [Context.BIND_AUTO_CREATE], so a prior
+     * restore test keeps the service alive after a bare [Context.stopService]. Always unbind via
+     * [BoostServiceClient.stopService], re-issue stop while polling, and shell-stop as backup.
+     */
     private fun ensureEngineIdle() = runBlocking {
         preferences.setOnboardingComplete(true)
         preferences.setKillSwitchEnabled(false)
         preferences.setBoostPercent(100)
         preferences.setAutoStartOnBoot(false)
+
+        // Preferred path: release BIND_AUTO_CREATE + stop engine + stopService.
+        serviceClient.stopService()
+        serviceClient.releaseBinding()
+
+        // Direct stop in case client path raced with a late bind.
         context.stopService(Intent(context, BoostForegroundService::class.java))
+
+        // Shell backup — defeats sticky / leftover startService races (no uiautomator dep).
+        val component = "${context.packageName}/$serviceClassName"
+        runCatching {
+            instrumentation.uiAutomation.executeShellCommand("am stopservice $component").close()
+        }
+
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.cancelAll()
-        Thread.sleep(500)
+        BoostForegroundService.isForegroundPromoted = false
+
+        val stopped = waitUntil(timeoutMs = SERVICE_STOP_TIMEOUT_MS) {
+            if (!isServiceRunning(serviceClassName) && !BoostForegroundService.isForegroundPromoted) {
+                return@waitUntil true
+            }
+            // Re-issue stop while polling — a pending bind may re-create briefly.
+            serviceClient.releaseBinding()
+            context.stopService(Intent(context, BoostForegroundService::class.java))
+            false
+        }
+        assertTrue(
+            "FGS still running after ${SERVICE_STOP_TIMEOUT_MS}ms teardown " +
+                "(package=${context.packageName}, service=$serviceClassName, " +
+                "promoted=${BoostForegroundService.isForegroundPromoted})",
+            stopped,
+        )
     }
 
     private fun bootCompletedIntent(): Intent = Intent(Intent.ACTION_BOOT_COMPLETED)
@@ -165,5 +230,53 @@ class BootReceiverFgsTest {
         @Suppress("DEPRECATION")
         return manager.getRunningServices(Int.MAX_VALUE)
             .any { it.service.className == serviceClassName }
+    }
+
+    private fun hasBootRestoreNotification(): Boolean {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        return manager.activeNotifications.any { it.id == BootRestoreNotifier.BOOT_NOTIFICATION_ID }
+    }
+
+    /** Poll until [condition] is true or [timeoutMs] elapses. Returns last evaluation. */
+    private fun waitUntil(timeoutMs: Long, condition: () -> Boolean): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (condition()) return true
+            Thread.sleep(POLL_MS)
+        }
+        return condition()
+    }
+
+    /**
+     * Returns true if [condition] becomes true within [timeoutMs] (used to detect unwanted
+     * side effects like a late FGS start).
+     */
+    private fun waitUntilAppears(timeoutMs: Long, condition: () -> Boolean): Boolean =
+        waitUntil(timeoutMs, condition)
+
+    private fun waitForProbe(
+        timeoutMs: Long,
+        predicate: (BoostProbeTestClient.Snapshot) -> Boolean,
+    ): BoostProbeTestClient.Snapshot {
+        var last = BoostProbeTestClient.dump(context)
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (predicate(last)) return last
+            Thread.sleep(POLL_MS)
+            last = BoostProbeTestClient.dump(context)
+        }
+        return last
+    }
+
+    companion object {
+        private const val SERVICE_STOP_TIMEOUT_MS = 5_000L
+        private const val SERVICE_START_TIMEOUT_MS = 5_000L
+        private const val ASYNC_SETTLE_TIMEOUT_MS = 3_000L
+        /**
+         * Observation window for asserting something does *not* start. Must cover trampoline
+         * activity launch + restore coroutine (previously Thread.sleep(2000) in these tests).
+         */
+        private const val NO_START_OBSERVE_MS = 2_500L
+        private const val POLL_MS = 100L
     }
 }

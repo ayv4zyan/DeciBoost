@@ -11,9 +11,14 @@ class FakeAudioEffectFactory(
     val loudnessEnhancers = mutableMapOf<Int, FakeLoudnessEnhancer>()
     val dynamicsProcessors = mutableMapOf<Int, FakeDynamicsProcessing>()
 
+    /** Counts new loudness handles created (skips reuse of an unreleased instance). */
+    var loudnessCreateCount: Int = 0
+        private set
+
     override fun createLoudnessEnhancer(sessionId: Int): LoudnessEnhancerHandle {
         val existing = loudnessEnhancers[sessionId]
         if (existing != null && !existing.released) return existing
+        loudnessCreateCount++
         return FakeLoudnessEnhancer(sessionId, maxGainMb).also { loudnessEnhancers[sessionId] = it }
     }
 
