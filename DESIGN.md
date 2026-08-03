@@ -4,7 +4,7 @@
 |-------|-------|
 | **Author** | Artur Ayvazyan ([@ayv4zyan](https://github.com/ayv4zyan)) |
 | **Date** | 2026-06-25 |
-| **Status** | Implemented / Current (v0.1.4 alpha — PRs 1–11 complete) |
+| **Status** | Implemented / Current (v0.1.5 alpha — PRs 1–11 complete) |
 | **Target platform** | Android 16 (API 36) primary; backward compatible to API 26 |
 
 ---
@@ -341,9 +341,9 @@ stateDiagram-v2
     [*] --> Idle
     Idle --> Active: isMusicActive=true OR configCountIncreased
     Active --> Paused: isMusicActive=false AND configCountStable 200ms
-    Paused --> Active: isMusicActive=true OR configCountIncreased
-    Active --> Active: configChanged (debounced 100ms, reapply)
-    Paused --> Recovering: userBoost>100 AND isMusicActive flip true
+    Paused --> Recovering: userBoost>100 AND (isMusicActive flip true OR config count>0)
+    Active --> Active: configChanged (debounced 100ms, reapply; opaque same-hash too)
+    Recovering --> Recovering: configChanged while recovering (reapply)
     Recovering --> Active: forceReapply success within 1500ms
     Recovering --> Paused: reapply failed after 3 retries
     Active --> Idle: boost==100 for 5min (service stop eligible)
@@ -353,9 +353,11 @@ stateDiagram-v2
 
 | From | To | Trigger | Debounce | Engine action |
 |------|----|---------|----------|---------------|
-| * | Active | `isMusicActive == true` | 0 ms | If boost>100: `forceReapply(PLAYBACK_ACTIVE)` |
+| * | Active / Recovering | `isMusicActive == true` | 0 ms | If boost>100: `forceReapply(PLAYBACK_ACTIVE)` + **settle reapply @ 400 ms** |
 | * | Paused | `isMusicActive == false` | 200 ms hold | None (effects stay attached) |
-| Active | Active | `onPlaybackConfigChanged` (media configs) | 100 ms coalesce | `forceReapply(PLAYBACK_CONFIG_CHANGED)` |
+| Active | Active | `onPlaybackConfigChanged` (incl. same count+usageHash) | 100 ms coalesce | `forceReapply(PLAYBACK_CONFIG_CHANGED)` (opaque events throttled 500 ms unless recently inactive) |
+| Paused | Recovering | config count > 0 while boost>100 | 100 ms coalesce | `forceReapply(PLAYBACK_CONFIG_CHANGED)` + settle @ 400 ms |
+| Recovering | Recovering | config change while boost>100 | 100 ms coalesce | `forceReapply(PLAYBACK_CONFIG_CHANGED)` + reschedule settle |
 | * | * | `AudioDeviceCallback.onAudioDevicesAdded/Removed` | 50 ms | `releaseAndRecreateGlobalEffects()` + reapply |
 | * | * | `ACTION_AUDIO_BECOMING_NOISY` | 0 ms | `releaseAndRecreateGlobalEffects()` + reapply |
 
@@ -368,10 +370,12 @@ fun diff(prev: ConfigSnapshot?, next: ConfigSnapshot): ConfigDiff {
     // count increase → new playback started
     // count decrease → playback stopped (may be pause OR app switch)
     // same count + usageHash change → track recreation (YouTube resume candidate)
+    // same count + same usageHash + platform callback → opaque track swap (ArcPlayer)
+    //   still reapplied while Active/Recovering/Paused (boost>100)
 }
 ```
 
-**Distinguishing pause vs new app:** cannot be exact on public API. Heuristic: if `isMusicActive` stays false for >200 ms then flips true within 30 s **without** config count hitting zero, treat as pause/resume; if count drops to 0 then rises, treat as new session — both paths trigger reapply when boost>100.
+**Distinguishing pause vs new app:** cannot be exact on public API. Heuristic: if `isMusicActive` stays false for >200 ms then flips true within 30 s **without** config count hitting zero, treat as pause/resume; if count drops to 0 then rises, treat as new session — both paths trigger reapply when boost>100. After resume, a **settle reapply** at 400 ms covers the race where the first apply lands before the new `AudioTrack` is in the mix (ArcPlayer pause → start another video).
 
 **Unit test vectors** (`testing/vectors/playback_sequences.json`):
 
@@ -382,6 +386,7 @@ fun diff(prev: ConfigSnapshot?, next: ConfigSnapshot): ConfigDiff {
 | `bluetooth_route` | [2,2] + device event | [T,T] | Active → releaseAndRecreate | 1 recreate |
 | `idle_no_boost` | [0,0] | [F,F] | Idle | 0 |
 | `notification_dominant` | [1,1] (USAGE_NOTIFICATION hash) | [T,T] | Active (boost suspended) | 0 while suspended |
+| `arcplayer_opaque_swap` | [1,1] same hash | [T,T] | Active → reapply on opaque callback | ≥2 |
 
 #### NonMediaPlaybackGuard (`pause_on_non_media`)
 
@@ -1069,7 +1074,7 @@ on:
 
 ## Implementation History (PRs 1–11)
 
-All planned PRs are **implemented** as of v0.1.4. The sections below document the original delivery sequence for reference.
+All planned PRs are **implemented** as of v0.1.5. The sections below document the original delivery sequence for reference.
 
 ### PR 1: Project scaffold & CI skeleton
 - **Files:** Root Gradle, modules, `DeciBoostApplication.kt`, `ci.yml` (unit job only)

@@ -41,6 +41,18 @@
       "boost_percent": 150,
       "expected_min_reapplies": 1,
       "expected_final_phase": "Active"
+    },
+    {
+      "id": "arcplayer_opaque_swap",
+      "config_counts": [1, 1],
+      "music_active": [true, true],
+      "configs": [
+        {"count": 1, "usageHash": 100, "hasMediaUsage": true},
+        {"count": 1, "usageHash": 100, "hasMediaUsage": true}
+      ],
+      "boost_percent": 150,
+      "expected_min_reapplies": 2,
+      "expected_final_phase": "Active"
     }
   ]
 }

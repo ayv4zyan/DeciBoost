@@ -53,8 +53,9 @@ object PlaybackVectorLoader {
                 ConfigSnapshot(
                     count = config.getInt("count"),
                     usageHash = config.getInt("usageHash"),
-                    hasMediaUsage = config.getBoolean("hasMediaUsage"),
-                    hasNotificationUsage = config.getBoolean("hasNotificationUsage"),
+                    hasMediaUsage = config.optBoolean("hasMediaUsage", true),
+                    hasNotificationUsage = config.optBoolean("hasNotificationUsage", false),
+                    hasAssistanceUsage = config.optBoolean("hasAssistanceUsage", false),
                 )
             }
         }
