@@ -8,7 +8,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-class BoostWatchdog {
+class BoostWatchdog(
+    /** Poll interval; override in unit tests to avoid racing manual verifier invokes. */
+    private val pollIntervalMs: Long = FeatureFlags.WATCHDOG_INTERVAL_MS,
+) {
     var verifier: (() -> Boolean)? = null
 
     private val scope = CoroutineScope(Dispatchers.Default)
@@ -20,7 +23,7 @@ class BoostWatchdog {
         if (job?.isActive == true) return
         job = scope.launch {
             while (isActive) {
-                delay(FeatureFlags.WATCHDOG_INTERVAL_MS)
+                delay(pollIntervalMs)
                 val healthy = verifier?.invoke() ?: true
                 if (!healthy) {
                     recoveryCount++

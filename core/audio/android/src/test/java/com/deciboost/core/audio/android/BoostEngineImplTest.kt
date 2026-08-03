@@ -58,7 +58,9 @@ class BoostEngineImplTest {
     @Test
     fun watchdog_unhealthy_releasesBeforeReapply_andDefersFailureCountUntilRecoveryCompletes() {
         val factory = FakeAudioEffectFactory()
-        val watchdog = BoostWatchdog()
+        // Long poll interval so only manual verifier invokes participate in this test.
+        // Default 750ms races under CI load (recovery can release the enhancer before asserts).
+        val watchdog = BoostWatchdog(pollIntervalMs = 60_000L)
         val engine = createEngine(
             effectFactory = factory,
             watchdog = watchdog,
@@ -67,29 +69,41 @@ class BoostEngineImplTest {
 
         engine.start()
         setBoostAndAwait(engine, 150)
+        watchdog.stop()
 
         val initialEnhancer = factory.loudnessEnhancers[SessionEffectRegistry.GLOBAL_SESSION]
-        assertTrue(initialEnhancer != null)
+        assertTrue("Expected global loudness enhancer after boost apply", initialEnhancer != null)
+        assertFalse("Enhancer should still be live after boost apply", initialEnhancer!!.released)
+        val createsAfterBoost = factory.loudnessCreateCount
 
+        // First unhealthy tick schedules release+reapply on the engine thread. A second tick
+        // while recoveryInProgress must not schedule another recovery (deferred failure count).
         watchdog.verifier?.invoke()
-        assertFalse(initialEnhancer!!.released)
         watchdog.verifier?.invoke()
-        assertFalse(initialEnhancer.released)
 
-        drainEngineHandler(engine)
+        awaitCondition(timeoutMs = 2_000) { initialEnhancer.released }
         assertEquals(ReapplyReason.WATCHDOG, engine.getLastReapplyReason())
-        assertTrue(initialEnhancer.released)
+        assertEquals(
+            "Double verifier invoke during recovery must produce only one recreate",
+            createsAfterBoost + 1,
+            factory.loudnessCreateCount,
+        )
 
         val recoveredEnhancer = factory.loudnessEnhancers[SessionEffectRegistry.GLOBAL_SESSION]
         assertTrue(recoveredEnhancer != null)
         assertFalse(recoveredEnhancer!!.released)
 
+        // Recovery cleared recoveryInProgress; next unhealthy tick is the 2nd failure → force path.
         watchdog.verifier?.invoke()
-        drainEngineHandler(engine)
+        awaitCondition(timeoutMs = 2_000) { recoveredEnhancer.released }
         val forceRecoveredEnhancer = factory.loudnessEnhancers[SessionEffectRegistry.GLOBAL_SESSION]
         assertTrue(forceRecoveredEnhancer != null)
-        assertTrue(recoveredEnhancer.released)
         assertFalse(forceRecoveredEnhancer!!.released)
+        assertEquals(
+            "Force recreate after second unhealthy cycle should create one more enhancer",
+            createsAfterBoost + 2,
+            factory.loudnessCreateCount,
+        )
     }
 
     private fun createEngine(
@@ -120,22 +134,22 @@ class BoostEngineImplTest {
         )
     }
 
-    private fun drainEngineHandler(@Suppress("UNUSED_PARAMETER") engine: BoostEngineImpl) {
-        Thread.sleep(200)
-    }
-
     private fun awaitState(
         engine: BoostEngineImpl,
         timeoutMs: Long = 1000,
         predicate: (com.deciboost.core.audio.policy.BoostState) -> Boolean,
     ) {
+        awaitCondition(timeoutMs) { predicate(engine.getState()) }
+    }
+
+    private fun awaitCondition(timeoutMs: Long = 1000, predicate: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
-            if (predicate(engine.getState())) {
+            if (predicate()) {
                 return
             }
             Thread.sleep(20)
         }
-        error("Timed out waiting for engine state predicate")
+        error("Timed out waiting for condition after ${timeoutMs}ms")
     }
 }
