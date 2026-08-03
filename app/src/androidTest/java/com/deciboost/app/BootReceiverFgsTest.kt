@@ -4,18 +4,20 @@ import android.app.ActivityManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import com.deciboost.app.receiver.BootCompletedReceiver
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.deciboost.app.receiver.BootCompletedReceiver
 import com.deciboost.app.service.BootRestoreActionReceiver
 import com.deciboost.app.service.BootRestoreNotifier
 import com.deciboost.app.service.BootRestoreTrampolineActivity
 import com.deciboost.app.service.BoostForegroundService
+import com.deciboost.app.service.BoostServiceClient
 import com.deciboost.core.data.BoostPreferences
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -31,9 +33,11 @@ class BootReceiverFgsTest {
     val hiltRule = HiltAndroidRule(this)
 
     @Inject lateinit var preferences: BoostPreferences
+    @Inject lateinit var serviceClient: BoostServiceClient
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val receiver = BootCompletedReceiver()
+    private val serviceClassName = BoostForegroundService::class.java.name
 
     @Before
     fun setUp() {
@@ -45,13 +49,22 @@ class BootReceiverFgsTest {
         )
     }
 
+    @After
+    fun tearDown() {
+        // Always tear down so a mid-test failure cannot leave BIND_AUTO_CREATE alive.
+        ensureEngineIdle()
+    }
+
     @Test
     fun bootReceiver_doesNotStartFgsAutomatically() = runBlocking {
         preferences.setAutoStartOnBoot(false)
         preferences.setBoostPercent(150)
         receiver.onReceive(context.applicationContext, bootCompletedIntent())
         Thread.sleep(800)
-        assertFalse(isServiceRunning(BoostForegroundService::class.java.name))
+        assertFalse(
+            "FGS must not start when auto-start-on-boot is disabled",
+            isServiceRunning(serviceClassName),
+        )
     }
 
     @Test
@@ -69,7 +82,7 @@ class BootReceiverFgsTest {
 
         assertTrue(
             "Expected FGS running after restore",
-            isServiceRunning(BoostForegroundService::class.java.name),
+            isServiceRunning(serviceClassName),
         )
         val probe = BoostProbeTestClient.dump(context)
         assertTrue(
@@ -109,7 +122,10 @@ class BootReceiverFgsTest {
         context.startActivity(intent)
         Thread.sleep(2_000)
 
-        assertFalse(isServiceRunning(BoostForegroundService::class.java.name))
+        assertFalse(
+            "Kill switch must prevent FGS from remaining/running after restore attempt",
+            isServiceRunning(serviceClassName),
+        )
         val probe = BoostProbeTestClient.dump(context)
         assertFalse(
             "Kill switch must block restore boost (gain=${probe.targetGainMb})",
@@ -128,7 +144,10 @@ class BootReceiverFgsTest {
         preferences.setBoostPercent(150)
         receiver.onReceive(context.applicationContext, bootCompletedIntent())
         Thread.sleep(800)
-        assertFalse(isServiceRunning(BoostForegroundService::class.java.name))
+        assertFalse(
+            "Boot receiver must only notify — FGS must not auto-start",
+            isServiceRunning(serviceClassName),
+        )
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val hasBootNotification = manager.activeNotifications.any {
             it.id == BootRestoreNotifier.BOOT_NOTIFICATION_ID
@@ -147,15 +166,55 @@ class BootReceiverFgsTest {
         )
     }
 
+    /**
+     * Fully stop FGS before/after each test.
+     *
+     * [BoostServiceClient.ensureRunning] binds with [Context.BIND_AUTO_CREATE], so a prior
+     * restore test can keep the service alive after a bare [Context.stopService]. Always
+     * unbind via [BoostServiceClient.stopService], then force-stop with shell as backup,
+     * and poll until [isServiceRunning] is false.
+     */
     private fun ensureEngineIdle() = runBlocking {
         preferences.setOnboardingComplete(true)
         preferences.setKillSwitchEnabled(false)
         preferences.setBoostPercent(100)
         preferences.setAutoStartOnBoot(false)
+
+        // Preferred path: release BIND_AUTO_CREATE + stop engine + stopService.
+        serviceClient.stopService()
+        serviceClient.releaseBinding()
+
+        // Direct stop in case client path raced with a late bind.
         context.stopService(Intent(context, BoostForegroundService::class.java))
+
+        // Shell backup — defeats sticky / leftover startService races.
+        val component = "${context.packageName}/$serviceClassName"
+        runCatching {
+            InstrumentationRegistry.getInstrumentation()
+                .uiAutomation
+                .executeShellCommand("am stopservice $component")
+                .close()
+        }
+
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.cancelAll()
-        Thread.sleep(500)
+
+        val deadlineMs = System.currentTimeMillis() + SERVICE_STOP_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadlineMs) {
+            if (!isServiceRunning(serviceClassName)) {
+                return@runBlocking
+            }
+            // Re-issue stop while polling — binding may re-create briefly.
+            serviceClient.releaseBinding()
+            context.stopService(Intent(context, BoostForegroundService::class.java))
+            Thread.sleep(SERVICE_STOP_POLL_MS)
+        }
+
+        assertFalse(
+            "FGS still running after ${SERVICE_STOP_TIMEOUT_MS}ms teardown " +
+                "(package=${context.packageName}, service=$serviceClassName)",
+            isServiceRunning(serviceClassName),
+        )
     }
 
     private fun bootCompletedIntent(): Intent = Intent(Intent.ACTION_BOOT_COMPLETED)
@@ -165,5 +224,10 @@ class BootReceiverFgsTest {
         @Suppress("DEPRECATION")
         return manager.getRunningServices(Int.MAX_VALUE)
             .any { it.service.className == serviceClassName }
+    }
+
+    companion object {
+        private const val SERVICE_STOP_TIMEOUT_MS = 5_000L
+        private const val SERVICE_STOP_POLL_MS = 100L
     }
 }
