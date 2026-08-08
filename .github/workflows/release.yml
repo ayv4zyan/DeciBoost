@@ -68,12 +68,35 @@ jobs:
             echo "versionName bumped: $previous -> $current"
           fi
 
+      - name: Setup release signing
+        if: steps.version.outputs.build_apk == 'true'
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "${RELEASE_KEYSTORE_BASE64}" ] || [ -z "${RELEASE_STORE_PASSWORD}" ] \
+            || [ -z "${RELEASE_KEY_ALIAS}" ] || [ -z "${RELEASE_KEY_PASSWORD}" ]; then
+            echo "::error::Missing release signing secrets (RELEASE_KEYSTORE_BASE64, RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD)"
+            exit 1
+          fi
+          mkdir -p signing
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > signing/github-release.keystore
+          {
+            echo "storeFile=signing/github-release.keystore"
+            echo "storePassword=${RELEASE_STORE_PASSWORD}"
+            echo "keyAlias=${RELEASE_KEY_ALIAS}"
+            echo "keyPassword=${RELEASE_KEY_PASSWORD}"
+          } > signing/github-release.properties
+
       - name: Build release APK
         if: steps.version.outputs.build_apk == 'true'
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
           cp app/build/outputs/apk/release/app-release.apk "DeciBoost-v${{ steps.version.outputs.current }}.apk"
+          rm -f signing/github-release.keystore signing/github-release.properties
 
       - name: Create GitHub Release
         if: steps.version.outputs.create_release == 'true'
