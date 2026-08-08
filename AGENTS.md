@@ -87,7 +87,7 @@ Replace any hit that describes **today’s** build, not an example or historical
 
 Pushing to `main` with a `versionName` change in `app/build.gradle.kts` triggers `.github/workflows/release.yml`, which builds a signed release APK, creates tag `v{versionName}`, and publishes a GitHub Release with auto-generated notes plus `DeciBoost-v{versionName}.apk` (e.g. `DeciBoost-v0.1.3.apk`). Do **not** create the tag manually unless re-cutting a failed release.
 
-APKs are signed with the committed CI keystore in `signing/github-release.keystore` (GitHub/sideload distribution only — not the Play Store upload key).
+APKs are signed with a **private** CI keystore injected from GitHub Actions secrets (`RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`). The keystore is **not** committed. See `signing/README.md`. This identity is for **GitHub/sideload distribution only** — not the Play Store upload key.
 
 `workflow_dispatch` on the same workflow backfills a missing release tag or uploads/replaces the APK on an existing release.
 

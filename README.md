@@ -83,6 +83,12 @@ _App store screenshots are pending for v0.1.5 (alpha)._
 
 ## Download & install
 
+### Prebuilt APK (GitHub Releases)
+
+Official sideload builds: [Releases](https://github.com/ayv4zyan/DeciBoost/releases).
+
+**Signing & trust:** Release APKs are signed with a **private** CI keystore stored only in GitHub Actions secrets (not in this repository). The signature means the APK was built by this project’s release pipeline. Older alpha APKs signed with a previously public test keystore are a **different** signing identity — updating from those may require uninstall + reinstall. Prefer building from source if you want full control over what you install.
+
 ### From source (debug)
 
 ```bash
@@ -104,7 +110,7 @@ Debug package: `com.deciboost.app.debug`
 
 ## Development
 
-Agent and contributor conventions (versioning, scope): [`AGENTS.md`](AGENTS.md). A `versionName` bump on `main` triggers a tagged GitHub Release with a signed APK via [`release.yml`](.github/workflows/release.yml). Latest build: [Releases](https://github.com/ayv4zyan/DeciBoost/releases).
+Agent and contributor conventions (versioning, scope): [`AGENTS.md`](AGENTS.md). A `versionName` bump on `main` triggers a tagged GitHub Release with a signed APK via [`release.yml`](.github/workflows/release.yml). Release signing setup: [`signing/README.md`](signing/README.md). Latest build: [Releases](https://github.com/ayv4zyan/DeciBoost/releases).
 
 ### Tech stack
 
@@ -117,7 +123,7 @@ Agent and contributor conventions (versioning, scope): [`AGENTS.md`](AGENTS.md).
 
 ```bash
 ./gradlew assembleDebug          # Debug APK
-./gradlew assembleRelease        # Release APK (minified)
+./gradlew assembleRelease        # Release APK (minified; signed only if local signing/ files exist — see signing/README.md)
 ./gradlew test                   # JVM unit tests
 ./gradlew detekt                 # Static analysis (all modules)
 ./gradlew :testing:audio-harness:connectedDebugAndroidTest  # Emulator harness

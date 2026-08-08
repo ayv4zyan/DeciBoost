@@ -18,3 +18,9 @@ gen/
 out/
 .gradle/
 .kotlin/
+
+# Release signing material — never commit (CI injects from GitHub Actions secrets)
+/signing/*.keystore
+/signing/*.jks
+/signing/*.properties
+!/signing/README.md
