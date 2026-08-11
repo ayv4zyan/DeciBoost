@@ -66,7 +66,7 @@ This fixes the common failure mode where boost *looks* enabled in software but d
 
 ## Screenshots
 
-_App store screenshots are pending for v0.2.2 (alpha)._
+_App store screenshots are pending for v0.2.3 (alpha)._
 
 ---
 
