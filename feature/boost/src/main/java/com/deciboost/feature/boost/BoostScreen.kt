@@ -491,7 +491,7 @@ private fun ArcBoostGauge(
                 center = Offset(cx, cy),
             )
         }
-        // Waveform only: live inset inside the arc (issue #9 C position).
+        // Center-bounce bars inset inside the arc (issue #9 C position; issue #16).
         WaveformVisualizer(
             enabled = visualizerEnabled,
             onPermissionRevoked = onPermissionRevoked,
