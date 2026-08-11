@@ -4,7 +4,7 @@
 |-------|-------|
 | **Author** | Artur Ayvazyan ([@ayv4zyan](https://github.com/ayv4zyan)) |
 | **Date** | 2026-06-25 |
-| **Status** | Implemented / Current (v0.1.8 alpha — PRs 1–11 complete) |
+| **Status** | Implemented / Current (v0.2.0 alpha — PRs 1–11 complete; theme picker) |
 | **Target platform** | Android 16 (API 36) primary; backward compatible to API 26 |
 
 ---
@@ -633,7 +633,9 @@ object BoostProbeClient {
 
 ### UI/UX design direction
 
-**Visual language:** “Premium audio studio” — dark-first, Material You dynamic accent.
+**Visual language:** “Premium audio studio” — dark-first, OLED-black fixed themes + optional Material You (wallpaper) colors.
+
+**Theme styles (Settings → Appearance, v0.2.0):** System colors (Material You surfaces), **System colors · OLED** (default on fresh install; wallpaper accents + true-black chassis), Violet, Cyan Peak, Warm VU, Scope Green. Fixed styles and System·OLED share pure-black surfaces; gauge and waveform follow the active primary. Pre–Android 12 falls back to Violet OLED for dynamic styles.
 
 | Screen | Components | Notes |
 |--------|------------|-------|

@@ -6,6 +6,7 @@ import com.deciboost.core.audio.policy.BoostState
 import com.deciboost.core.audio.policy.PlaybackPhase
 import com.deciboost.core.audio.policy.ReapplyReason
 import com.deciboost.core.data.BoostPreferences
+import com.deciboost.core.data.ThemeStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -92,6 +93,7 @@ class FakeBoostPreferences : BoostPreferences {
     private val effectiveMaxGainFlow = MutableStateFlow(3000)
     private val safetyLevelsFlow = MutableStateFlow<Set<Int>>(emptySet())
     private val visualizerFlow = MutableStateFlow(false)
+    private val themeStyleFlow = MutableStateFlow(ThemeStyle.DEFAULT)
 
     override val boostPercent: Flow<Int> = boostPercentFlow.asStateFlow()
     override val volumePercent: Flow<Int> = volumePercentFlow.asStateFlow()
@@ -103,6 +105,7 @@ class FakeBoostPreferences : BoostPreferences {
     override val effectiveMaxGainMb: Flow<Int> = effectiveMaxGainFlow.asStateFlow()
     override val safetyAcknowledgedLevels: Flow<Set<Int>> = safetyLevelsFlow.asStateFlow()
     override val visualizerEnabled: Flow<Boolean> = visualizerFlow.asStateFlow()
+    override val themeStyle: Flow<ThemeStyle> = themeStyleFlow.asStateFlow()
 
     override suspend fun setBoostPercent(value: Int) {
         boostPercentFlow.value = value
@@ -142,6 +145,10 @@ class FakeBoostPreferences : BoostPreferences {
 
     override suspend fun setVisualizerEnabled(value: Boolean) {
         visualizerFlow.value = value
+    }
+
+    override suspend fun setThemeStyle(value: ThemeStyle) {
+        themeStyleFlow.value = value
     }
 
     override suspend fun migrateEffectiveMaxGainMbIfNeeded() = Unit

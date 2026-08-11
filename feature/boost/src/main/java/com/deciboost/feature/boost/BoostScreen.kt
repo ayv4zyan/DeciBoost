@@ -70,10 +70,7 @@ import androidx.compose.ui.unit.em
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deciboost.core.audio.policy.PlaybackPhase
-import com.deciboost.feature.boost.ui.theme.BrandBlue
-import com.deciboost.feature.boost.ui.theme.BrandCyanBright
-import com.deciboost.feature.boost.ui.theme.BrandViolet
-import com.deciboost.feature.boost.ui.theme.GaugeTrack
+import com.deciboost.feature.boost.ui.theme.LocalBrandAccents
 import com.deciboost.feature.settings.SettingsSummaryPanel
 import com.deciboost.feature.settings.SettingsSummaryState
 import kotlin.math.cos
@@ -329,10 +326,6 @@ private fun BoostContent(
     }
 }
 
-private val GAUGE_TRACK_COLOR = GaugeTrack
-private val GAUGE_GRADIENT_START = BrandViolet
-private val GAUGE_GRADIENT_MID = BrandBlue
-private val GAUGE_GRADIENT_END = BrandCyanBright
 private const val GAUGE_ARC_START_ANGLE = 135f
 private const val GAUGE_ARC_SWEEP_MAX = 270f
 
@@ -453,6 +446,7 @@ private fun StatusDot(color: Color) {
 
 @Composable
 private fun ArcBoostGauge(percent: Float) {
+    val accents = LocalBrandAccents.current
     val sweep = ((percent - 100f) / 100f) * GAUGE_ARC_SWEEP_MAX
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(220.dp)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -461,7 +455,7 @@ private fun ArcBoostGauge(percent: Float) {
             val topLeft = Offset(stroke / 2, stroke / 2)
             val arcSize = Size(diameter, diameter)
             drawArc(
-                color = GAUGE_TRACK_COLOR,
+                color = accents.gaugeTrack,
                 startAngle = GAUGE_ARC_START_ANGLE,
                 sweepAngle = GAUGE_ARC_SWEEP_MAX,
                 useCenter = false,
@@ -472,9 +466,9 @@ private fun ArcBoostGauge(percent: Float) {
             drawArc(
                 brush = Brush.sweepGradient(
                     listOf(
-                        GAUGE_GRADIENT_START,
-                        GAUGE_GRADIENT_MID,
-                        GAUGE_GRADIENT_END,
+                        accents.gaugeStart,
+                        accents.gaugeMid,
+                        accents.gaugeEnd,
                     ),
                 ),
                 startAngle = GAUGE_ARC_START_ANGLE,
@@ -489,7 +483,7 @@ private fun ArcBoostGauge(percent: Float) {
             val cx = size.width / 2 + radius * cos(angleRad).toFloat()
             val cy = size.height / 2 + radius * sin(angleRad).toFloat()
             drawCircle(
-                color = androidx.compose.ui.graphics.Color.White,
+                color = Color.White,
                 radius = 10f,
                 center = Offset(cx, cy),
             )

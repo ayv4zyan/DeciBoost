@@ -13,6 +13,7 @@ interface BoostPreferences {
     val effectiveMaxGainMb: Flow<Int>
     val safetyAcknowledgedLevels: Flow<Set<Int>>
     val visualizerEnabled: Flow<Boolean>
+    val themeStyle: Flow<ThemeStyle>
 
     suspend fun setBoostPercent(value: Int)
     suspend fun setVolumePercent(value: Int)
@@ -24,6 +25,7 @@ interface BoostPreferences {
     suspend fun setEffectiveMaxGainMb(value: Int)
     suspend fun setSafetyAcknowledgedLevels(levels: Set<Int>)
     suspend fun setVisualizerEnabled(value: Boolean)
+    suspend fun setThemeStyle(value: ThemeStyle)
 
     /** Copies legacy or orphaned fingerprint gain cap into the current device key if missing. */
     suspend fun migrateEffectiveMaxGainMbIfNeeded()

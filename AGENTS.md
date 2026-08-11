@@ -93,7 +93,7 @@ APKs are signed with a **private** CI keystore injected from GitHub Actions secr
 
 ### Current version
 
-**`0.1.8`** (`versionCode` **108**).
+**`0.2.0`** (`versionCode` **200**).
 
 ## Build & verify
 
