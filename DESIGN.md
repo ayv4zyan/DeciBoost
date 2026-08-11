@@ -4,7 +4,7 @@
 |-------|-------|
 | **Author** | Artur Ayvazyan ([@ayv4zyan](https://github.com/ayv4zyan)) |
 | **Date** | 2026-06-25 |
-| **Status** | Implemented / Current (v0.1.6 alpha — PRs 1–11 complete) |
+| **Status** | Implemented / Current (v0.1.7 alpha — PRs 1–11 complete) |
 | **Target platform** | Android 16 (API 36) primary; backward compatible to API 26 |
 
 ---
