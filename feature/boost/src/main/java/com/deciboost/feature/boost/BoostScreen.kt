@@ -66,7 +66,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -404,13 +403,6 @@ private fun SessionStatusStrip(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            Text(
-                text = "Status only",
-                style = MaterialTheme.typography.labelSmall,
-                color = muted.copy(alpha = 0.75f),
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
         }
     }
 }

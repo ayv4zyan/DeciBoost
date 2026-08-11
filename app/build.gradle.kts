@@ -33,8 +33,8 @@ android {
         applicationId = "com.deciboost.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 201
-        versionName = "0.2.1"
+        versionCode = 202
+        versionName = "0.2.2"
         testInstrumentationRunner = "com.deciboost.app.HiltTestRunner"
     }
 
