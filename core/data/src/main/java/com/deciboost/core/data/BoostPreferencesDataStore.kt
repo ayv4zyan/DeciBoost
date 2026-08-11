@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStore
@@ -88,6 +89,10 @@ class BoostPreferencesDataStore(
 
     override val visualizerEnabled: Flow<Boolean> = dataStore.data.map {
         it[Keys.VISUALIZER_ENABLED] ?: false
+    }
+
+    override val themeStyle: Flow<ThemeStyle> = dataStore.data.map { prefs ->
+        ThemeStyle.fromStorageKey(prefs[Keys.THEME_STYLE])
     }
 
     override suspend fun setBoostPercent(value: Int) {
@@ -174,6 +179,10 @@ class BoostPreferencesDataStore(
         dataStore.edit { it[Keys.VISUALIZER_ENABLED] = value }
     }
 
+    override suspend fun setThemeStyle(value: ThemeStyle) {
+        dataStore.edit { it[Keys.THEME_STYLE] = value.storageKey }
+    }
+
     private fun preferenceIntEntries(prefs: Preferences): Map<String, Int> =
         prefs.asMap().mapNotNull { (key, value) ->
             preferenceIntValue(value)?.let { key.name to it }
@@ -196,5 +205,6 @@ class BoostPreferencesDataStore(
         val LEGACY_EFFECTIVE_MAX_GAIN_MB = intPreferencesKey("effective_max_gain_mb")
         val SAFETY_ACKNOWLEDGED_LEVELS = stringSetPreferencesKey("safety_acknowledged_levels")
         val VISUALIZER_ENABLED = booleanPreferencesKey("visualizer_enabled")
+        val THEME_STYLE = stringPreferencesKey("theme_style")
     }
 }

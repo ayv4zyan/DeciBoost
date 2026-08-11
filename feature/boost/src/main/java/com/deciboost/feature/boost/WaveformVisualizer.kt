@@ -13,7 +13,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -21,14 +20,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.deciboost.core.audio.policy.SessionEffectRegistry
-import com.deciboost.feature.boost.ui.theme.BrandCyan
+import com.deciboost.feature.boost.ui.theme.LocalBrandAccents
 import kotlin.math.abs
 
 private const val WAVEFORM_BYTE_MASK = 0xFF
 private const val WAVEFORM_NORMALIZE_DIVISOR = 128f
 private const val WAVEFORM_MIN_BAR_HEIGHT = 2f
 private const val WAVEFORM_BAR_STROKE_WIDTH = 3f
-private val WAVEFORM_BAR_COLOR: Color = BrandCyan
 
 @Composable
 fun WaveformVisualizer(
@@ -77,6 +75,8 @@ fun WaveformVisualizer(
         }
     }
 
+    val barColor = LocalBrandAccents.current.waveform
+
     Canvas(
         modifier = modifier
             .fillMaxWidth()
@@ -91,7 +91,7 @@ fun WaveformVisualizer(
                 WAVEFORM_NORMALIZE_DIVISOR - 1f
             val barHeight = (abs(normalized) * size.height / 2f).coerceAtLeast(WAVEFORM_MIN_BAR_HEIGHT)
             drawLine(
-                color = WAVEFORM_BAR_COLOR,
+                color = barColor,
                 start = androidx.compose.ui.geometry.Offset(x, size.height / 2f - barHeight),
                 end = androidx.compose.ui.geometry.Offset(x, size.height / 2f + barHeight),
                 strokeWidth = WAVEFORM_BAR_STROKE_WIDTH,

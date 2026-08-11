@@ -11,9 +11,9 @@ import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.deciboost.core.data.BoostPreferences
+import com.deciboost.core.data.ThemeStyle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -40,6 +40,9 @@ class SettingsViewModel @Inject constructor(
     val visualizerEnabled = preferences.visualizerEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val themeStyle = preferences.themeStyle
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeStyle.DEFAULT)
+
     fun setAutoStartOnBoot(enabled: Boolean) = viewModelScope.launch {
         preferences.setAutoStartOnBoot(enabled)
     }
@@ -58,6 +61,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setVisualizerEnabled(enabled: Boolean) = viewModelScope.launch {
         preferences.setVisualizerEnabled(enabled)
+    }
+
+    fun setThemeStyle(style: ThemeStyle) = viewModelScope.launch {
+        preferences.setThemeStyle(style)
     }
 
     fun syncVisualizerPermission() {

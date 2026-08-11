@@ -67,6 +67,7 @@ fun SettingsScreen(
     val pauseNonMedia by viewModel.pauseOnNonMedia.collectAsStateWithLifecycle()
     val killSwitch by viewModel.killSwitchEnabled.collectAsStateWithLifecycle()
     val visualizer by viewModel.visualizerEnabled.collectAsStateWithLifecycle()
+    val themeStyle by viewModel.themeStyle.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {
@@ -120,6 +121,12 @@ fun SettingsScreen(
             SafetyNotesBanner(
                 expanded = safetyExpanded,
                 onToggle = { safetyExpanded = !safetyExpanded },
+            )
+
+            SettingsSectionLabel("Appearance")
+            ThemePicker(
+                selected = themeStyle,
+                onSelect = viewModel::setThemeStyle,
             )
 
             SettingsSectionLabel("Behavior")
