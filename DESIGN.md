@@ -4,7 +4,7 @@
 |-------|-------|
 | **Author** | Artur Ayvazyan ([@ayv4zyan](https://github.com/ayv4zyan)) |
 | **Date** | 2026-06-25 |
-| **Status** | Implemented / Current (v0.2.0 alpha — PRs 1–11 complete; theme picker) |
+| **Status** | Implemented / Current (v0.2.1 alpha — PRs 1–11 complete; theme picker; gauge-inset waveform) |
 | **Target platform** | Android 16 (API 36) primary; backward compatible to API 26 |
 
 ---
@@ -639,7 +639,7 @@ object BoostProbeClient {
 
 | Screen | Components | Notes |
 |--------|------------|-------|
-| **Boost (home)** | Arc slider (100–200%), system volume row, device chip, waveform (opt-in) | Haptic detents at 125/150/175/200% |
+| **Boost (home)** | Arc slider (100–200%) with opt-in waveform inset in gauge, system volume row, session status strip | Haptic detents at 125/150/175/200%; waveform above the fold (issue #9 C position only) |
 | **Settings** | Boot restore preference, gradual boost, **pause boost for non-media** toggle, safety warnings | See global side-effects |
 | **Onboarding** | Notifications → battery optimization | Required for FGS |
 

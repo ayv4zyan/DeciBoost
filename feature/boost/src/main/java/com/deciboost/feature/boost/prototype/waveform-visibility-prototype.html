@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DeciBoost · Waveform visibility prototype (issue #9)</title>
+  <style>
+    :root {
+      --phone-w: 320px;
+      --phone-h: 640px;
+      --switcher-h: 130px;
+      /* OLED chassis (product default · System colors · OLED / fixed themes) */
+      --bg: #000000;
+      --surface: #0a0a0a;
+      --elevated: #141414;
+      --on: #f0f0f0;
+      --muted: #a8a8a8;
+      --outline: #2e2e2e;
+      --track: #1e1e1e;
+      --primary: #7b5cf0;
+      --on-primary: #ffffff;
+      --secondary: #40e8f0;
+      --tertiary: #3d6fd4;
+      --waveform: #7b5cf0;
+      --error: #ff6b6b;
+      --fold: #ffe600;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #0d0d10;
+      color: #e8e8ec;
+      min-height: 100vh;
+      padding-bottom: calc(var(--switcher-h) + 24px);
+    }
+    header.banner {
+      padding: 16px 20px 8px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    header.banner h1 {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      letter-spacing: 0.02em;
+      color: #ffe600;
+    }
+    header.banner p {
+      margin: 0;
+      font-size: 13px;
+      color: #9a9aa8;
+      line-height: 1.45;
+      max-width: 78ch;
+    }
+    header.banner code {
+      background: #1e1e28;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    header.banner kbd {
+      background: #1e1e28;
+      border: 1px solid #3a3a48;
+      border-radius: 4px;
+      padding: 0 5px;
+      font-size: 11px;
+    }
+    .stage {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 28px;
+      padding: 20px 16px 32px;
+      max-width: 1100px;
+      margin: 0 auto;
+      align-items: flex-start;
+    }
+    .phone-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .phone-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #6a6a78;
+    }
+    .phone {
+      width: var(--phone-w);
+      height: var(--phone-h);
+      border-radius: 28px;
+      border: 2px solid #2a2a36;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.55);
+      background: var(--bg);
+      color: var(--on);
+      position: relative;
+    }
+    .status-bar {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--on);
+      opacity: 0.85;
+      flex-shrink: 0;
+    }
+    .topbar {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px 0 16px;
+      background: var(--surface);
+      border-bottom: 1px solid color-mix(in srgb, var(--outline) 50%, transparent);
+      flex-shrink: 0;
+    }
+    .topbar h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 20px;
+      display: grid;
+      place-items: center;
+      color: var(--on);
+      opacity: 0.9;
+      font-size: 18px;
+    }
+
+    /* Content shells */
+    .shell {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background: var(--bg);
+    }
+    .scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 20px 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      align-items: center;
+    }
+    .scroll.tight { gap: 12px; padding-top: 14px; }
+    .scroll.pad-dock { padding-bottom: 8px; }
+
+    /* Fold line — marks bottom of first-screen viewport inside .shell */
+    .fold-line {
+      position: absolute;
+      left: 0; right: 0;
+      /* phone-h 640 − status 28 − topbar 52 = 560 content; fold at full visible */
+      bottom: 0;
+      height: 0;
+      border-top: 1.5px dashed var(--fold);
+      pointer-events: none;
+      z-index: 20;
+      opacity: 0;
+    }
+    .fold-line.on {
+      opacity: 0.85;
+    }
+    .fold-tag {
+      position: absolute;
+      right: 6px;
+      top: -18px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: #000;
+      background: var(--fold);
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    /* Shared chrome */
+    .gauge-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      position: relative;
+    }
+    .gauge { width: 168px; height: 168px; display: block; }
+    .gauge.sm { width: 128px; height: 128px; }
+    .gauge.xs { width: 96px; height: 96px; }
+    .boost-pct {
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      color: var(--primary);
+      line-height: 1;
+    }
+    .boost-pct.md { font-size: 34px; }
+    .boost-pct.sm { font-size: 28px; }
+    .sub {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .sub.sm { font-size: 12px; }
+    .slider {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--track);
+      position: relative;
+      margin: 4px 0;
+      width: 100%;
+    }
+    .slider .fill {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      border-radius: 2px;
+      background: var(--primary);
+      width: 55%;
+    }
+    .slider .thumb {
+      position: absolute;
+      top: 50%;
+      left: 55%;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--primary);
+      transform: translate(-50%, -50%);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .field {
+      width: 100%;
+    }
+    .field-label {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .vol-pct {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* Status strip (current / dense) */
+    .status-strip {
+      background: color-mix(in srgb, var(--elevated) 55%, transparent);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 12px;
+      width: 100%;
+    }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .status-row .k {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .status-row .v {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-hint {
+      text-align: center;
+      font-size: 10px;
+      color: var(--muted);
+      opacity: 0.75;
+      margin-top: 2px;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--primary);
+      flex-shrink: 0;
+    }
+    .dot.warn { background: var(--tertiary); }
+    .dot.bad { background: var(--error); }
+
+    /* Compact chip row */
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      width: 100%;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--elevated) 70%, transparent);
+      border: 1px solid color-mix(in srgb, var(--outline) 60%, transparent);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--on);
+    }
+    .chip .k {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* Waveforms */
+    .wave {
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2.5px;
+      width: 100%;
+    }
+    .wave.sm { height: 36px; }
+    .wave.xs { height: 28px; }
+    .wave i {
+      display: block;
+      width: 3px;
+      border-radius: 2px;
+      background: var(--waveform);
+      opacity: 0.9;
+      transform-origin: center;
+      animation: pulse 0.9s ease-in-out infinite;
+    }
+    .wave i:nth-child(odd) { animation-delay: 0.15s; }
+    .wave i:nth-child(3n) { animation-delay: 0.3s; }
+    .wave i:nth-child(4n) { animation-delay: 0.05s; }
+    @keyframes pulse {
+      0%, 100% { transform: scaleY(0.55); opacity: 0.7; }
+      50% { transform: scaleY(1); opacity: 1; }
+    }
+    .wave-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: center;
+      width: 100%;
+    }
+
+    /* Thin continuous VU meter */
+    .vu {
+      width: 100%;
+      height: 10px;
+      border-radius: 5px;
+      background: var(--track);
+      overflow: hidden;
+      position: relative;
+    }
+    .vu .level {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 62%;
+      border-radius: 5px;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      animation: vu 1.4s ease-in-out infinite;
+    }
+    @keyframes vu {
+      0%, 100% { width: 48%; }
+      40% { width: 78%; }
+      70% { width: 55%; }
+    }
+    .vu-row {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* Sticky dock (variant A) */
+    .dock {
+      flex-shrink: 0;
+      border-top: 1px solid color-mix(in srgb, var(--outline) 55%, transparent);
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+      padding: 10px 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 5;
+    }
+    .dock-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dock-title .live {
+      color: var(--primary);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .dock-title .live::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 60%, transparent);
+      animation: ping 1.4s ease infinite;
+    }
+    @keyframes ping {
+      0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent); }
+      70% { box-shadow: 0 0 0 6px transparent; }
+      100% { box-shadow: 0 0 0 0 transparent; }
+    }
+
+    /* Gauge with integrated waveform (variant B) */
+    .gauge-stack {
+      position: relative;
+      width: 180px;
+      height: 180px;
+      display: grid;
+      place-items: center;
+    }
+    .gauge-stack .gauge { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .gauge-wave {
+      position: absolute;
+      width: 92px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      top: 52%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .gauge-wave i {
+      width: 2.5px;
+      border-radius: 2px;
+      background: var(--waveform);
+      animation: pulse 0.85s ease-in-out infinite;
+    }
+
+    /* Diagnostic-first hero (variant C) */
+    .diag-hero {
+      width: 100%;
+      background: color-mix(in srgb, var(--elevated) 60%, transparent);
+      border-radius: 16px;
+      padding: 14px 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border: 1px solid color-mix(in srgb, var(--outline) 45%, transparent);
+    }
+    .diag-hero .title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .diag-hero .title-row strong {
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .live-pill {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--on-primary);
+      background: var(--primary);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+    .boost-block {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding-top: 4px;
+    }
+    .boost-inline {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+    }
+    .boost-inline .nums {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 72px;
+    }
+
+    /* Callout for baseline */
+    .below-fold {
+      width: 100%;
+      border: 1px dashed color-mix(in srgb, var(--error) 70%, transparent);
+      border-radius: 12px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+    }
+    .below-fold::before {
+      content: "BELOW FOLD — needs scroll";
+      position: absolute;
+      top: -9px;
+      left: 10px;
+      background: var(--bg);
+      color: var(--error);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      padding: 0 6px;
+    }
+
+    /* Large-type phone */
+    .phone.a11y .boost-pct { font-size: 48px; }
+    .phone.a11y .sub { font-size: 15px; }
+    .phone.a11y .field-label { font-size: 15px; }
+    .phone.a11y .chip { font-size: 13px; padding: 7px 12px; }
+    .phone.a11y .status-row { font-size: 14px; }
+    .phone.a11y .status-row .k { font-size: 11px; }
+    .phone.a11y .wave { height: 56px; }
+    .phone.a11y .dock-title { font-size: 12px; }
+
+    /* Legend card */
+    .legend {
+      max-width: 320px;
+      background: #16161e;
+      border: 1px solid #2a2a36;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #b0b0bc;
+    }
+    .legend h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #ffe600;
+    }
+    .legend ul { margin: 0; padding-left: 16px; }
+    .legend li { margin-bottom: 6px; }
+    .legend strong { color: #e8e8ec; }
+    .pass { color: #3dff6e; font-weight: 700; }
+    .fail { color: #ff6b6b; font-weight: 700; }
+    .mixed { color: #e8a020; font-weight: 700; }
+
+    /* Switcher */
+    .switcher {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px 16px;
+      pointer-events: none;
+    }
+    .switcher > * { pointer-events: auto; }
+    .state-dump {
+      max-width: 560px;
+      width: calc(100% - 24px);
+      background: #1a1a12ee;
+      border: 1px solid #6a6a20;
+      border-radius: 8px;
+      color: #e8ff6a;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      padding: 8px 12px;
+      text-align: center;
+    }
+    .pill {
+      display: flex;
+      align-items: center;
+      background: #ffee00;
+      color: #000;
+      border: 2px solid #1a1a00;
+      border-radius: 28px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+      min-width: 280px;
+      max-width: 420px;
+      overflow: hidden;
+    }
+    .pill button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      width: 48px;
+      height: 44px;
+      font-size: 22px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #000;
+    }
+    .pill button:hover { background: rgba(0,0,0,0.08); }
+    .pill .label {
+      flex: 1;
+      text-align: center;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .toggles {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .toggles button {
+      appearance: none;
+      border: 1px solid #4a4a28;
+      background: #1a1a12;
+      color: #e8ff6a;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .toggles button.on {
+      background: #ffe600;
+      color: #000;
+      border-color: #1a1a00;
+    }
+  </style>
+</head>
+<body>
+  <!--
+    PROTOTYPE (issue #9) — throwaway. Not production.
+    Question: how should session status + live audio stay visible on common phone
+    heights without scrolling, while keeping boost control usable (incl. large fonts)?
+
+    Open this file in a browser. Arrow keys or the yellow bar cycle variants.
+    Shareable: ?variant=A|B|C|D|E
+  -->
+  <header class="banner">
+    <h1>PROTOTYPE · issue #9 · waveform above the fold</h1>
+    <p>
+      Goal: <strong>status + live audio indicator</strong> visible without scroll on typical phones.
+      Variants are structurally different (not color tweaks). Yellow dashed line = first-screen edge.
+      Toggle <strong>large type</strong> to stress accessibility. Flip with the bar or
+      <kbd>←</kbd>/<kbd>→</kbd>. Shareable: <code>?variant=B</code>
+    </p>
+  </header>
+
+  <div class="stage" id="stage"></div>
+
+  <div class="switcher">
+    <div class="state-dump" id="stateDump"></div>
+    <div class="toggles">
+      <button type="button" id="foldToggle" class="on" title="Show fold line">Fold line</button>
+      <button type="button" id="a11yToggle" title="Simulate large system font">Large type</button>
+      <button type="button" id="activeToggle" class="on" title="Playback Active vs Idle">Playback Active</button>
+    </div>
+    <div class="pill" role="toolbar" aria-label="Layout prototype switcher">
+      <button type="button" id="prev" aria-label="Previous layout">‹</button>
+      <div class="label" id="label" title="Click for next"></div>
+      <button type="button" id="next" aria-label="Next layout">›</button>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * PROTOTYPE — issue #9 waveform visibility on Boost home.
+     *
+     * A Baseline: current vertical stack (shows the problem)
+     * B Sticky dock: status + wave pinned to bottom of viewport
+     * C Gauge-integrated: wave lives inside the arc; chips under %
+     * D Diagnostic-first: live capture is the hero; boost is secondary
+     * E Inline meter path: thin VU + chips between % and sliders
+     */
+    const ORDER = ["A", "B", "C", "D", "E"];
+
+    const VARIANTS = {
+      A: {
+        key: "A",
+        name: "Baseline stack",
+        thesis: "Today’s hierarchy: large gauge → % → boost → volume → status → waveform. Wave + status fall below the fold on ~640px phones.",
+        foldPass: "fail",
+        a11yNote: "Worse with large fonts — more content pushed below.",
+        aboveFold: ["Arc gauge", "Boost %", "Boost slider", "Volume (partial)"],
+        belowFold: ["Session status", "Waveform"],
+      },
+      B: {
+        key: "B",
+        name: "Sticky live dock",
+        thesis: "Controls scroll; a fixed bottom dock always shows status chips + waveform. Diagnostic stays visible even while scrubbing boost.",
+        foldPass: "pass",
+        a11yNote: "Dock height grows with large type — still above fold by design; gauge may shrink in view.",
+        aboveFold: ["Gauge / boost (scroll)", "Pinned status chips", "Pinned waveform"],
+        belowFold: ["Volume (scroll only)"],
+      },
+      C: {
+        key: "C",
+        name: "Gauge-integrated wave",
+        thesis: "No separate wave block — motion lives inside the arc. Status collapses to chips under %. Saves ~64–120dp of vertical chrome.",
+        foldPass: "pass",
+        a11yNote: "Chips wrap under large type; wave still readable as motion in gauge.",
+        aboveFold: ["Gauge + inner wave", "Boost %", "Status chips", "Boost slider", "Volume"],
+        belowFold: [],
+      },
+      D: {
+        key: "D",
+        name: "Diagnostic-first",
+        thesis: "Invert hierarchy: “is anything happening?” is the hero card (status + wave). Boost becomes a compact control block below. Best for the issue’s diagnose use-case.",
+        foldPass: "pass",
+        a11yNote: "Hero card stays top; boost block may need light scroll under huge fonts.",
+        aboveFold: ["Live status hero", "Full waveform", "Compact boost control"],
+        belowFold: ["Volume (maybe)"],
+      },
+      E: {
+        key: "E",
+        name: "Inline meter path",
+        thesis: "Eye path: big % → thin live VU → chips → boost slider. Medium gauge. Status + level sit in the natural scan path without a second section at the bottom.",
+        foldPass: "pass",
+        a11yNote: "VU stays thin; chips wrap. Preferable if a full waveform feels noisy.",
+        aboveFold: ["Compact gauge", "Boost %", "Thin VU meter", "Status chips", "Boost slider"],
+        belowFold: ["Volume (edge)"],
+      },
+    };
+
+    let showFold = true;
+    let largeType = false;
+    let playbackActive = true;
+
+    function waveBars(n = 28, scale = 1) {
+      const base = [10, 22, 36, 18, 30, 14, 40, 24, 12, 34, 16, 28, 14, 38, 20, 26, 12, 32, 18, 24, 10, 30, 16, 36, 14, 22, 12, 28, 18, 34];
+      return base.slice(0, n).map((h, i) => {
+        const hh = Math.max(4, Math.round(h * scale));
+        return `<i style="height:${hh}px;animation-delay:${(i % 7) * 0.08}s"></i>`;
+      }).join("");
+    }
+
+    function gaugeSvg(size = 168, withInner = false) {
+      const r = size / 2;
+      const trackR = r - 18;
+      const start = 135;
+      const full = 270;
+      const fill = 148;
+      function pt(angle, rad, cx = r, cy = r) {
+        const a = (angle * Math.PI) / 180;
+        return [cx + rad * Math.cos(a), cy + rad * Math.sin(a)];
+      }
+      function arcPath(startA, sweep, rad) {
+        const [x1, y1] = pt(startA, rad);
+        const [x2, y2] = pt(startA + sweep, rad);
+        const large = sweep > 180 ? 1 : 0;
+        return `M ${x1} ${y1} A ${rad} ${rad} 0 ${large} 1 ${x2} ${y2}`;
+      }
+      const [tx, ty] = pt(start + fill, trackR);
+      const gid = `gg-${size}-${withInner ? 1 : 0}`;
+      return `
+        <svg class="gauge${size <= 100 ? " xs" : size <= 140 ? " sm" : ""}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
+          <defs>
+            <linearGradient id="${gid}" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#7B5CF0"/>
+              <stop offset="50%" stop-color="#3D6FD4"/>
+              <stop offset="100%" stop-color="#56F2FC"/>
+            </linearGradient>
+          </defs>
+          <path d="${arcPath(start, full, trackR)}" fill="none" stroke="#1E1E1E" stroke-width="14" stroke-linecap="round"/>
+          <path d="${arcPath(start, fill, trackR)}" fill="none" stroke="url(#${gid})" stroke-width="14" stroke-linecap="round"/>
+          <circle cx="${tx}" cy="${ty}" r="7" fill="#fff"/>
+        </svg>`;
+    }
+
+    function statusStrip() {
+      const phase = playbackActive ? "Active" : "Idle";
+      const dot = playbackActive ? "" : " warn";
+      return `
+        <div class="status-strip">
+          <div class="status-row"><span class="k">Output</span><span class="v">🎧 Speaker</span></div>
+          <div class="status-row"><span class="k">Playback</span><span class="v"><span class="dot${dot}"></span> ${phase}</span></div>
+          <div class="status-row"><span class="k">Engine</span><span class="v"><span class="dot"></span> OK</span></div>
+          <div class="status-hint">Status only</div>
+        </div>`;
+    }
+
+    function statusChips(compact = false) {
+      const phase = playbackActive ? "Active" : "Idle";
+      const dot = playbackActive ? "" : " warn";
+      return `
+        <div class="chips">
+          <span class="chip"><span class="k">Out</span> 🎧 Speaker</span>
+          <span class="chip"><span class="dot${dot}"></span> ${phase}</span>
+          <span class="chip"><span class="dot"></span> Engine OK</span>
+        </div>`;
+    }
+
+    function volumeField() {
+      return `
+        <div class="field">
+          <div class="field-label">System volume</div>
+          <div class="slider"><div class="fill" style="width:70%"></div><div class="thumb" style="left:70%"></div></div>
+          <div class="vol-pct">70%</div>
+        </div>`;
+    }
+
+    function boostSlider() {
+      return `
+        <div class="field">
+          <div class="slider"><div class="fill"></div><div class="thumb"></div></div>
+        </div>`;
+    }
+
+    function phoneChrome(innerShell) {
+      const a11y = largeType ? " a11y" : "";
+      return `
+        <div class="phone${a11y}">
+          <div class="status-bar"><span>9:41</span><span>▮▮▮</span></div>
+          <div class="topbar">
+            <h2>DeciBoost</h2>
+            <div class="icon-btn">⚙</div>
+          </div>
+          ${innerShell}
+        </div>`;
+    }
+
+    function foldOverlay() {
+      return `<div class="fold-line${showFold ? " on" : ""}" aria-hidden="true"><span class="fold-tag">Fold</span></div>`;
+    }
+
+    // —— Variant bodies ——
+
+    function variantA() {
+      // Current product stack — wave below fold
+      return phoneChrome(`
+        <div class="shell">
+          <div class="scroll">
+            <div class="gauge-wrap">
+              ${gaugeSvg(168)}
+              <div class="boost-pct">155%</div>
+              <div class="sub">Media boost above system max</div>
+            </div>
+            ${boostSlider()}
+            ${volumeField()}
+            <div class="below-fold">
+              ${statusStrip()}
+              <div class="wave">${waveBars(26)}</div>
+            </div>
+          </div>
+          ${foldOverlay()}
+        </div>`);
+    }
+
+    function variantB() {
+      // Sticky dock — always visible live strip
+      return phoneChrome(`
+        <div class="shell">
+          <div class="scroll pad-dock tight">
+            <div class="gauge-wrap">
+              ${gaugeSvg(168)}
+              <div class="boost-pct">155%</div>
+              <div class="sub">Media boost above system max</div>
+            </div>
+            ${boostSlider()}
+            ${volumeField()}
+            <div class="sub sm" style="opacity:0.55;margin-top:8px">Scroll area · live strip stays put ↓</div>
+          </div>
+          <div class="dock">
+            <div class="dock-title">
+              <span>Session</span>
+              <span class="live">${playbackActive ? "Capturing" : "Idle"}</span>
+            </div>
+            ${statusChips()}
+            <div class="wave sm">${waveBars(30, 0.85)}</div>
+          </div>
+          ${foldOverlay()}
+        </div>`);
+    }
+
+    function variantC() {
+      // Wave inside gauge + chips
+      return phoneChrome(`
+        <div class="shell">
+          <div class="scroll tight">
+            <div class="gauge-stack" aria-label="Boost gauge with live waveform">
+              ${gaugeSvg(180, true)}
+              <div class="gauge-wave">${waveBars(16, 0.7)}</div>
+            </div>
+            <div class="boost-pct md">155%</div>
+            <div class="sub sm">Media boost above system max</div>
+            ${statusChips()}
+            ${boostSlider()}
+            ${volumeField()}
+          </div>
+          ${foldOverlay()}
+        </div>`);
+    }
+
+    function variantD() {
+      // Diagnostic-first
+      return phoneChrome(`
+        <div class="shell">
+          <div class="scroll tight">
+            <div class="diag-hero">
+              <div class="title-row">
+                <strong>Live session</strong>
+                <span class="live-pill">${playbackActive ? "Active" : "Idle"}</span>
+              </div>
+              ${statusChips()}
+              <div class="wave-label">Output level</div>
+              <div class="wave">${waveBars(32)}</div>
+            </div>
+            <div class="boost-block">
+              <div class="boost-inline">
+                ${gaugeSvg(96)}
+                <div class="nums">
+                  <div class="boost-pct sm">155%</div>
+                  <div class="sub sm" style="text-align:left">Boost</div>
+                </div>
+              </div>
+              ${boostSlider()}
+            </div>
+            ${volumeField()}
+          </div>
+          ${foldOverlay()}
+        </div>`);
+    }
+
+    function variantE() {
+      // Inline meter between % and controls
+      return phoneChrome(`
+        <div class="shell">
+          <div class="scroll tight">
+            <div class="gauge-wrap">
+              ${gaugeSvg(128)}
+              <div class="boost-pct md">155%</div>
+              <div class="sub sm">Media boost above system max</div>
+            </div>
+            <div class="vu-row">
+              <div class="wave-label">Live level</div>
+              <div class="vu" aria-label="Live level meter"><div class="level"></div></div>
+              <div class="wave xs">${waveBars(36, 0.55)}</div>
+            </div>
+            ${statusChips()}
+            ${boostSlider()}
+            ${volumeField()}
+          </div>
+          ${foldOverlay()}
+        </div>`);
+    }
+
+    const RENDERERS = { A: variantA, B: variantB, C: variantC, D: variantD, E: variantE };
+
+    function passLabel(p) {
+      if (p === "pass") return '<span class="pass">PASS · above fold</span>';
+      if (p === "fail") return '<span class="fail">FAIL · needs scroll</span>';
+      return '<span class="mixed">MIXED</span>';
+    }
+
+    function render(key) {
+      const pack = VARIANTS[key];
+      const stage = document.getElementById("stage");
+      stage.innerHTML = `
+        <div class="phone-wrap">
+          <div class="phone-label">Boost home · ${largeType ? "large type" : "default type"}</div>
+          ${RENDERERS[key]()}
+        </div>
+        <div class="phone-wrap">
+          <div class="phone-label">What changes</div>
+          <div class="legend">
+            <h3>${pack.key} — ${pack.name}</h3>
+            <p style="margin:0 0 10px">${pack.thesis}</p>
+            <p style="margin:0 0 8px">${passLabel(pack.foldPass)}</p>
+            <ul>
+              <li><strong>Above fold:</strong> ${pack.aboveFold.join(" · ") || "—"}</li>
+              <li><strong>Below fold:</strong> ${pack.belowFold.join(" · ") || "none"}</li>
+              <li><strong>Large type:</strong> ${pack.a11yNote}</li>
+            </ul>
+            <p style="margin:10px 0 0;opacity:0.75">
+              State: playback=${playbackActive ? "Active" : "Idle"} · visualizer=on · engine=OK · boost=155% · vol=70%
+            </p>
+          </div>
+        </div>`;
+
+      document.getElementById("label").textContent = `${pack.key} — ${pack.name}`;
+      document.getElementById("stateDump").innerHTML =
+        `PROTOTYPE · issue #9 · variant <strong>${pack.key}</strong> · ${passLabel(pack.foldPass)}<br/>` +
+        `<span style="opacity:0.95">${pack.thesis}</span>`;
+
+      const url = new URL(location.href);
+      url.searchParams.set("variant", key);
+      history.replaceState(null, "", url);
+      document.title = `DeciBoost · ${pack.key} ${pack.name} · issue #9 prototype`;
+    }
+
+    function currentKey() {
+      const q = new URLSearchParams(location.search).get("variant");
+      return ORDER.includes(q) ? q : "A";
+    }
+
+    function cycle(delta) {
+      const i = ORDER.indexOf(currentKey());
+      render(ORDER[(i + delta + ORDER.length) % ORDER.length]);
+    }
+
+    document.getElementById("prev").addEventListener("click", () => cycle(-1));
+    document.getElementById("next").addEventListener("click", () => cycle(1));
+    document.getElementById("label").addEventListener("click", () => cycle(1));
+
+    document.getElementById("foldToggle").addEventListener("click", (e) => {
+      showFold = !showFold;
+      e.currentTarget.classList.toggle("on", showFold);
+      render(currentKey());
+    });
+    document.getElementById("a11yToggle").addEventListener("click", (e) => {
+      largeType = !largeType;
+      e.currentTarget.classList.toggle("on", largeType);
+      render(currentKey());
+    });
+    document.getElementById("activeToggle").addEventListener("click", (e) => {
+      playbackActive = !playbackActive;
+      e.currentTarget.classList.toggle("on", playbackActive);
+      e.currentTarget.textContent = playbackActive ? "Playback Active" : "Playback Idle";
+      render(currentKey());
+    });
+
+    document.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.key === "ArrowLeft") { e.preventDefault(); cycle(-1); }
+      if (e.key === "ArrowRight") { e.preventDefault(); cycle(1); }
+    });
+
+    render(currentKey());
+  </script>
+</body>
+</html>

@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -225,6 +227,10 @@ fun BoostScreen(
     }
 }
 
+/**
+ * Home layout: same hierarchy as before, except the opt-in waveform is drawn
+ * inside the boost gauge (issue #9 — variant C waveform position only).
+ */
 @Composable
 private fun BoostContent(
     modifier: Modifier = Modifier,
@@ -251,7 +257,11 @@ private fun BoostContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        ArcBoostGauge(percent = animatedPercent)
+        ArcBoostGauge(
+            percent = animatedPercent,
+            visualizerEnabled = visualizerEnabled,
+            onPermissionRevoked = onPermissionRevoked,
+        )
 
         Text(
             text = "${percent}%",
@@ -309,11 +319,6 @@ private fun BoostContent(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        WaveformVisualizer(
-            enabled = visualizerEnabled,
-            onPermissionRevoked = onPermissionRevoked,
-        )
-
         if (!isHealthy) {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                 Text(
@@ -328,6 +333,8 @@ private fun BoostContent(
 
 private const val GAUGE_ARC_START_ANGLE = 135f
 private const val GAUGE_ARC_SWEEP_MAX = 270f
+private val GaugeInnerWaveWidth = 100.dp
+private val GaugeInnerWaveHeight = 56.dp
 
 /** Read-only session indicators (issue #7 variant A) — no press affordance. */
 @Composable
@@ -445,7 +452,11 @@ private fun StatusDot(color: Color) {
 }
 
 @Composable
-private fun ArcBoostGauge(percent: Float) {
+private fun ArcBoostGauge(
+    percent: Float,
+    visualizerEnabled: Boolean,
+    onPermissionRevoked: () -> Unit,
+) {
     val accents = LocalBrandAccents.current
     val sweep = ((percent - 100f) / 100f) * GAUGE_ARC_SWEEP_MAX
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(220.dp)) {
@@ -488,6 +499,14 @@ private fun ArcBoostGauge(percent: Float) {
                 center = Offset(cx, cy),
             )
         }
+        // Waveform only: live inset inside the arc (issue #9 C position).
+        WaveformVisualizer(
+            enabled = visualizerEnabled,
+            onPermissionRevoked = onPermissionRevoked,
+            modifier = Modifier
+                .width(GaugeInnerWaveWidth)
+                .height(GaugeInnerWaveHeight),
+        )
     }
 }
 
