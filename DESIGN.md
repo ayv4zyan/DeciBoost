@@ -4,7 +4,7 @@
 |-------|-------|
 | **Author** | Artur Ayvazyan ([@ayv4zyan](https://github.com/ayv4zyan)) |
 | **Date** | 2026-06-25 |
-| **Status** | Implemented / Current (v0.2.1 alpha — PRs 1–11 complete; theme picker; gauge-inset waveform) |
+| **Status** | Implemented / Current (v0.2.2 alpha — PRs 1–11 complete; theme picker; gauge-inset waveform) |
 | **Target platform** | Android 16 (API 36) primary; backward compatible to API 26 |
 
 ---
