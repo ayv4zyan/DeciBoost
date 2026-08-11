@@ -28,10 +28,17 @@ private const val WAVEFORM_NORMALIZE_DIVISOR = 128f
 private const val WAVEFORM_MIN_BAR_HEIGHT = 2f
 private const val WAVEFORM_BAR_STROKE_WIDTH = 3f
 
+/**
+ * Live output waveform (opt-in [enabled] + RECORD_AUDIO).
+ * Size is fully controlled by [modifier] — e.g. full-width strip or compact
+ * inset inside the boost gauge (issue #9 variant C).
+ */
 @Composable
 fun WaveformVisualizer(
     enabled: Boolean,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
+        .fillMaxWidth()
+        .height(64.dp),
     onPermissionRevoked: () -> Unit = {},
 ) {
     if (!enabled) return
@@ -77,13 +84,9 @@ fun WaveformVisualizer(
 
     val barColor = LocalBrandAccents.current.waveform
 
-    Canvas(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(64.dp),
-    ) {
-        if (waveform.isEmpty()) return@Canvas
-        val step = (waveform.size / size.width.toInt()).coerceAtLeast(1)
+    Canvas(modifier = modifier) {
+        if (waveform.isEmpty() || size.width < 1f) return@Canvas
+        val step = (waveform.size / size.width.toInt().coerceAtLeast(1)).coerceAtLeast(1)
         var x = 0f
         var index = 0
         while (index < waveform.size && x < size.width) {
