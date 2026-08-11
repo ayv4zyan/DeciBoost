@@ -2,28 +2,27 @@ package com.deciboost.feature.boost
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -54,15 +54,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deciboost.core.audio.policy.PlaybackPhase
@@ -301,31 +305,12 @@ private fun BoostContent(
             )
         }
 
-        AssistChip(
-            onClick = {},
-            label = { Text(outputDevice) },
-            leadingIcon = {
-                Icon(Icons.Default.Headphones, contentDescription = null, modifier = Modifier.size(18.dp))
-            },
-            modifier = Modifier.semantics {
-                liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite
-                contentDescription = "Output device: $outputDevice"
-            },
+        SessionStatusStrip(
+            outputDevice = outputDevice,
+            playbackPhase = playbackPhase,
+            isHealthy = isHealthy,
+            modifier = Modifier.fillMaxWidth(),
         )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AssistChip(
-                onClick = {},
-                label = { Text(playbackPhase.name) },
-                leadingIcon = {
-                    Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
-                },
-            )
-            AssistChip(
-                onClick = {},
-                label = { Text(if (isHealthy) "Engine OK" else "Engine issue") },
-            )
-        }
 
         WaveformVisualizer(
             enabled = visualizerEnabled,
@@ -350,6 +335,121 @@ private val GAUGE_GRADIENT_MID = BrandBlue
 private val GAUGE_GRADIENT_END = BrandCyanBright
 private const val GAUGE_ARC_START_ANGLE = 135f
 private const val GAUGE_ARC_SWEEP_MAX = 270f
+
+/** Read-only session indicators (issue #7 variant A) — no press affordance. */
+@Composable
+private fun SessionStatusStrip(
+    outputDevice: String,
+    playbackPhase: PlaybackPhase,
+    isHealthy: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    val engineLabel = if (isHealthy) "OK" else "Issue"
+    val playbackOk = playbackPhase == PlaybackPhase.Active
+
+    Surface(
+        modifier = modifier.semantics(mergeDescendants = true) {
+            liveRegion = LiveRegionMode.Polite
+            contentDescription =
+                "Status: output $outputDevice, playback ${playbackPhase.name}, engine $engineLabel"
+        },
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            StatusKeyValueRow(label = "Output", labelColor = muted) {
+                Icon(
+                    imageVector = Icons.Default.Headphones,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = outputDevice,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            StatusKeyValueRow(label = "Playback", labelColor = muted) {
+                StatusDot(
+                    color = if (playbackOk) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.tertiary
+                    },
+                )
+                Text(
+                    text = playbackPhase.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            StatusKeyValueRow(label = "Engine", labelColor = muted) {
+                StatusDot(
+                    color = if (isHealthy) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                )
+                Text(
+                    text = engineLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Text(
+                text = "Status only",
+                style = MaterialTheme.typography.labelSmall,
+                color = muted.copy(alpha = 0.75f),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusKeyValueRow(
+    label: String,
+    labelColor: Color,
+    value: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = labelColor,
+            letterSpacing = 0.05.em,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            value()
+        }
+    }
+}
+
+@Composable
+private fun StatusDot(color: Color) {
+    Box(
+        modifier = Modifier
+            .size(7.dp)
+            .background(color = color, shape = CircleShape),
+    )
+}
 
 @Composable
 private fun ArcBoostGauge(percent: Float) {
