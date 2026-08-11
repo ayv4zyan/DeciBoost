@@ -1,7 +1,6 @@
 package com.deciboost.feature.settings
 
 import android.os.Build
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,18 +38,23 @@ fun SettingsSummaryPanel(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(vertical = 16.dp),
     ) {
-        Text("Device & Settings", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            "Device & Settings",
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
         Text(
             "Output: $outputDevice",
             style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
         Text(
             "Device: ${Build.MANUFACTURER} ${Build.MODEL} (API ${Build.VERSION.SDK_INT})",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
         Spacer(modifier = Modifier.height(8.dp))
         SettingToggle(
@@ -58,18 +63,21 @@ fun SettingsSummaryPanel(
             checked = settingsState.autoStartOnBoot,
             onCheckedChange = onAutoStartChange,
         )
+        HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
         SettingToggle(
             title = "Gradual boost",
             subtitle = "Ramp boost smoothly when changing levels",
             checked = settingsState.gradualBoost,
             onCheckedChange = onGradualBoostChange,
         )
+        HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
         SettingToggle(
             title = "Pause boost for non-media",
             subtitle = "Disable boost during notification-dominant playback",
             checked = settingsState.pauseOnNonMedia,
             onCheckedChange = onPauseOnNonMediaChange,
         )
+        HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
         SettingToggle(
             title = "Kill switch",
             subtitle = "Emergency rollback to 100%",
@@ -77,7 +85,10 @@ fun SettingsSummaryPanel(
             onCheckedChange = onKillSwitchChange,
         )
         Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = onNavigateToSettings) {
+        TextButton(
+            onClick = onNavigateToSettings,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        ) {
             Text("Full Settings")
         }
     }
